@@ -7,20 +7,14 @@ from datetime import datetime
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# --- [스타일] CSS 긴급 수정 (아이콘 깨짐 원인 제거) ---
+# --- [스타일] CSS 수정 (아이콘 깨짐 방지 강력 모드) ---
 st.markdown("""
 <style>
-    /* [문제 원인 해결]
-       이전에는 'word-break: keep-all'을 너무 넓게 적용해서
-       아이콘(Ligature)이 글자로 분해되는 현상이 있었습니다.
-       이번에는 딱 '본문(p)'에만 적용하여 아이콘을 보호합니다.
-    */
-
-    /* 1. 본문 내용 (글자 크기 키움 + 한글 줄바꿈 방지) */
+    /* 1. 본문 텍스트 (글자 크기 키움 + 한글 줄바꿈 방지) */
     div[data-testid="stMarkdownContainer"] p {
         font-size: 18px !important;
         line-height: 1.6 !important;
-        word-break: keep-all !important; /* 본문만 적용! */
+        word-break: keep-all !important;
     }
     
     /* 2. 리스트(목록) 글자 크기 */
@@ -34,16 +28,30 @@ st.markdown("""
         h3 { font-size: 1.3rem !important; word-break: keep-all !important; }
     }
     
-    /* 4. [핵심] Expander 헤더(아이콘 있는 곳)는 줄바꿈 설정을 '기본값'으로 강제 초기화 */
+    /* [핵심 해결책] 화살표 아이콘이 글자로 깨지는 현상 강력 방지 */
+    /* 아이콘이 들어있는 공간의 줄바꿈 설정을 강제로 '기본(normal)'로 돌림 */
     .streamlit-expanderHeader {
-        word-break: normal !important; /* 아이콘이 깨지지 않게 함 */
-        font-size: 16px !important;
+        word-break: normal !important; 
     }
     
-    /* 5. 아이콘 폰트 강제 지정 (혹시 모를 대비) */
-    .material-icons {
+    /* 아이콘 자체에 대한 강력한 스타일 지정 (글자로 풀리지 않게 고정) */
+    .streamlit-expanderHeader .material-icons, .material-icons {
         font-family: 'Material Icons' !important;
-        word-break: normal !important;
+        font-weight: normal !important;
+        font-style: normal !important;
+        display: inline-block !important;
+        line-height: 1 !important;
+        text-transform: none !important;
+        letter-spacing: normal !important;
+        word-wrap: normal !important;
+        white-space: nowrap !important;
+        direction: ltr !important;
+        /* 브라우저별 폰트 렌더링 최적화 */
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        -moz-osx-font-smoothing: grayscale;
+        font-feature-settings: 'liga';
+        word-break: normal !important; /* 여기서 keep-all을 무력화시킴 */
     }
 </style>
 """, unsafe_allow_html=True)
@@ -120,7 +128,7 @@ with tab2:
     st.caption("회사를 위한 좋은 아이디어를 자유롭게 남겨주세요.")
     
     # 2-1. 글쓰기 접이식 메뉴
-    with st.expander("✍️ 새 제안 및 건의사항 작성하기 (클릭)", expanded=False):
+    with st.expander("✍️ 제안 및 건의사항 작성하기 (클릭)", expanded=False):
         with st.form("suggestion_form", clear_on_submit=True):
             col1, col2 = st.columns([1, 1])
             with col1:
