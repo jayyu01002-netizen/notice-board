@@ -7,22 +7,17 @@ from datetime import datetime
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# --- [스타일] CSS (모바일 최적화) ---
+# --- [스타일] CSS ---
 st.markdown("""
 <style>
-    /* 1. 본문 텍스트 설정 */
     div[data-testid="stMarkdownContainer"] p {
         font-size: 18px !important;
         line-height: 1.6 !important;
         word-break: keep-all !important;
     }
-    
-    /* 2. 모바일 제목 크기 조정 */
     @media (max-width: 768px) {
         h1 { font-size: 2.0rem !important; word-break: keep-all !important; }
         h3 { font-size: 1.3rem !important; word-break: keep-all !important; }
-        
-        /* 버튼 크기 넉넉하게 */
         div.stButton > button {
             width: 100%;
             height: 3.5rem;
@@ -46,234 +41,294 @@ def load_data(sheet_name):
     try:
         sheet = get_worksheet(sheet_name)
         data = sheet.get_all_records()
-        return pd.DataFrame(data)
+        # 모든 데이터는 문자열로 변환하여 비교 오류 방지
+        df = pd.DataFrame(data)
+        return df.astype(str) 
     except Exception as e:
         return pd.DataFrame()
 
-# --- [함수] 데이터 추가 (Create) ---
+# --- [함수] 저장 로직 (비밀번호 추가됨) ---
 def save_notice(date, title, content, is_important):
     sheet = get_worksheet("공지사항")
     sheet.append_row([date, title, content, "TRUE" if is_important else "FALSE"])
     st.cache_data.clear()
 
-def save_suggestion(date, title, content, author, is_private):
+def save_suggestion(date, title, content, author, is_private, password):
     sheet = get_worksheet("건의사항")
-    sheet.append_row([date, title, content, author, "TRUE" if is_private else "FALSE"])
+    # F열: 비밀번호 추가
+    sheet.append_row([date, title, content, author, "TRUE" if is_private else "FALSE", str(password)])
     st.cache_data.clear()
 
-# --- [함수] 데이터 삭제 (Delete) ---
+def save_attendance(date, name, type_val, target_time, reason, password):
+    sheet = get_worksheet("근태신청")
+    # G열: 비밀번호 추가
+    sheet.append_row([date, name, type_val, target_time, reason, "대기중", str(password)])
+    st.cache_data.clear()
+
+# --- [함수] 삭제/수정/상태변경 ---
 def delete_row(sheet_name, row_idx):
-    # 구글 시트는 1부터 시작, 헤더가 1행이므로 데이터는 2행부터 시작
-    # pandas index는 0부터 시작하므로, 실제 행 번호 = index + 2
     sheet = get_worksheet(sheet_name)
     sheet.delete_rows(row_idx + 2)
     st.cache_data.clear()
 
-# --- [함수] 데이터 수정 (Update) ---
 def update_notice(row_idx, date, title, content, is_important):
     sheet = get_worksheet("공지사항")
-    # A열~D열 업데이트
     target_row = row_idx + 2
     sheet.update(range_name=f"A{target_row}:D{target_row}", 
                  values=[[date, title, content, "TRUE" if is_important else "FALSE"]])
     st.cache_data.clear()
 
-def update_suggestion(row_idx, date, title, content, author, is_private):
-    sheet = get_worksheet("건의사항")
-    # A열~E열 업데이트
-    target_row = row_idx + 2
-    sheet.update(range_name=f"A{target_row}:E{target_row}", 
-                 values=[[date, title, content, author, "TRUE" if is_private else "FALSE"]])
+def update_attendance_status(row_idx, new_status):
+    sheet = get_worksheet("근태신청")
+    # 상태 컬럼은 F열(6번째)
+    sheet.update_cell(row_idx + 2, 6, new_status)
     st.cache_data.clear()
 
 
 # --- [UI] 메인 화면 ---
 st.title("🏢 제이유 사내광장")
 
-# 상태 관리용
-if 'show_write_form' not in st.session_state:
-    st.session_state['show_write_form'] = False
+if 'show_sugg_form' not in st.session_state: st.session_state['show_sugg_form'] = False
+if 'show_attend_form' not in st.session_state: st.session_state['show_attend_form'] = False
 
-def toggle_write_form():
-    st.session_state['show_write_form'] = not st.session_state['show_write_form']
+def toggle_sugg(): st.session_state['show_sugg_form'] = not st.session_state['show_sugg_form']
+def toggle_attend(): st.session_state['show_attend_form'] = not st.session_state['show_attend_form']
 
-tab1, tab2, tab3 = st.tabs(["📋 공지사항", "🗣️ 제안 및 건의", "⚙️ 관리자"])
+tab1, tab2, tab3, tab4 = st.tabs(["📋 공지", "🗣️ 건의", "📅 근태신청", "⚙️ 관리자"])
 
-# ==========================================
-# 1. 공지사항 탭
-# ==========================================
+# 1. 공지사항
 with tab1:
     if st.button("🔄 공지 새로고침", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
-    with st.spinner('로딩 중...'):
-        df = load_data("공지사항")
+    df = load_data("공지사항")
     st.markdown("---")
-    
     if df.empty:
         st.info("공지사항이 없습니다.")
     else:
-        # 최신순 정렬
-        df_rev = df.iloc[::-1]
-        for index, row in df_rev.iterrows():
+        for index, row in df.iloc[::-1].iterrows():
             is_imp = str(row.get("중요", "FALSE")).upper() == "TRUE"
             with st.container(border=True):
-                if is_imp:
-                    st.markdown(f":red[**[중요] 🔥 {row['제목']}**]")
-                else:
-                    st.subheader(f"📌 {row['제목']}")
+                if is_imp: st.markdown(f":red[**[중요] 🔥 {row['제목']}**]")
+                else: st.subheader(f"📌 {row['제목']}")
                 st.caption(f"📅 {row['작성일']}")
                 st.markdown(f"{row['내용']}")
 
-# ==========================================
-# 2. 제안 및 건의 탭
-# ==========================================
+# 2. 건의사항
 with tab2:
-    st.write("### 🗣️ 자유 게시판 & 건의함")
-    st.caption("자유롭게 의견을 남겨주세요.")
+    st.write("### 🗣️ 자유 게시판")
+    if st.button("✍️ 건의사항 작성 (터치)", on_click=toggle_sugg, use_container_width=True): pass
     
-    # 글쓰기 버튼
-    if st.button("✍️ 제안 및 건의사항 작성하기 (터치)", on_click=toggle_write_form, use_container_width=True):
-        pass
-
-    if st.session_state['show_write_form']:
+    if st.session_state['show_sugg_form']:
         with st.container(border=True):
-            st.info("작성 후 '등록'을 누르면 닫힙니다. (수정/삭제는 관리자에게 문의)")
+            st.info("비밀번호는 본인 확인용입니다.")
             with st.form("suggestion_form", clear_on_submit=True):
-                col1, col2 = st.columns([1, 1])
-                with col1:
-                    author_input = st.text_input("작성자", placeholder="이름 (생략가능)")
-                with col2:
-                    is_private = st.checkbox("🔒 관리자에게만", help="비공개 건의")
-                s_title = st.text_input("제목", placeholder="제목 입력")
-                s_content = st.text_area("내용", height=100, placeholder="내용 입력")
+                c1, c2 = st.columns(2)
+                with c1: author = st.text_input("작성자 (필수)", placeholder="홍길동")
+                with c2: pw_input = st.text_input("비밀번호 (4자리)", type="password", max_chars=4)
                 
-                if st.form_submit_button("등록", use_container_width=True):
-                    if not s_content:
-                        st.warning("내용을 입력하세요.")
-                    else:
-                        final_author = author_input if author_input.strip() else "익명"
-                        now = datetime.now().strftime("%Y-%m-%d %H:%M")
-                        save_suggestion(now, s_title, s_content, final_author, is_private)
-                        st.success("등록되었습니다.")
-                        st.session_state['show_write_form'] = False
-                        st.rerun()
-
-    st.divider()
-    if st.button("🔄 게시판 새로고침", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-        
-    df_s = load_data("건의사항")
-    if df_s.empty:
-        st.info("등록된 글이 없습니다.")
-    else:
-        df_s_rev = df_s.iloc[::-1]
-        for index, row in df_s_rev.iterrows():
-            if str(row.get("비공개", "FALSE")).upper() != "TRUE":
-                with st.container(border=True):
-                    st.markdown(f"**💬 {row['제목']}**")
-                    col1, col2 = st.columns([1, 1])
-                    with col_info1:
-                        st.caption(f"👤 {row.get('작성자', '익명')}")
-                    with col_info2:
-                        st.caption(f"📅 {row['작성일']}")
-                    st.markdown(f"{row['내용']}")
-
-# ==========================================
-# 3. 관리자 탭 (수정/삭제 기능 통합)
-# ==========================================
-with tab3:
-    st.write("🔒 관리자 전용")
-    password = st.text_input("비밀번호", type="password")
-    
-    if str(password).strip() == str(st.secrets["admin_password"]).strip():
-        st.success("관리자 모드 접속")
-        st.divider()
-        
-        # 관리 작업 선택
-        mode = st.radio("작업 선택", ["📝 새 공지 작성", "🔧 공지사항 관리(수정/삭제)", "🔧 건의사항 관리(수정/삭제/보기)"])
-        
-        # 3-1. 새 공지 작성
-        if mode == "📝 새 공지 작성":
-            with st.form("notice_form", clear_on_submit=True):
-                st.write("### 새 공지 쓰기")
                 title = st.text_input("제목")
-                content = st.text_area("내용")
-                is_important = st.checkbox("상단 강조")
+                content = st.text_area("내용", height=100)
+                private = st.checkbox("🔒 비공개 (나와 관리자만 봄)")
+                
                 if st.form_submit_button("등록", use_container_width=True):
-                    save_notice(datetime.now().strftime("%Y-%m-%d %H:%M"), title, content, is_important)
+                    if not content or not author or not pw_input:
+                        st.warning("작성자, 비밀번호, 내용을 모두 입력하세요.")
+                    else:
+                        save_suggestion(datetime.now().strftime("%Y-%m-%d"), title, content, author, private, pw_input)
+                        st.success("등록됨")
+                        st.session_state['show_sugg_form'] = False
+                        st.rerun()
+    st.divider()
+    
+    # 건의사항 조회 모드 (공개글 or 내글 찾기)
+    search_mode = st.radio("보기 모드", ["공개 게시판 보기", "🔒 내 건의사항 조회 (비공개 포함)"], horizontal=True)
+    
+    df_s = load_data("건의사항")
+    
+    if search_mode == "공개 게시판 보기":
+        if not df_s.empty:
+            for index, row in df_s.iloc[::-1].iterrows():
+                if str(row.get("비공개", "FALSE")).upper() != "TRUE":
+                    with st.container(border=True):
+                        st.markdown(f"**💬 {row['제목']}**")
+                        st.caption(f"👤 {row.get('작성자','익명')} | 📅 {row['작성일']}")
+                        st.markdown(f"{row['내용']}")
+    else:
+        # 내 글 조회
+        with st.form("my_sugg_search"):
+            c1, c2 = st.columns(2)
+            with c1: my_name = st.text_input("작성자 이름")
+            with c2: my_pw = st.text_input("비밀번호", type="password")
+            if st.form_submit_button("조회"):
+                if not df_s.empty and my_name and my_pw:
+                    # 이름과 비밀번호가 일치하는 행만 필터링
+                    my_rows = df_s[
+                        (df_s['작성자'] == my_name) & 
+                        (df_s['비밀번호'].astype(str) == str(my_pw))
+                    ]
+                    if my_rows.empty:
+                        st.error("일치하는 글이 없습니다.")
+                    else:
+                        st.success(f"{len(my_rows)}건이 조회되었습니다.")
+                        for i, r in my_rows.iloc[::-1].iterrows():
+                            with st.container(border=True):
+                                st.write(f"**[{r.get('비공개')}] {r['제목']}**")
+                                st.markdown(r['내용'])
+                                st.caption(r['작성일'])
+
+# 3. 근태신청 (철저한 보안 적용)
+with tab3:
+    st.write("### 📅 연차/근태 신청")
+    
+    if st.button("📝 근태 신청서 작성 (터치)", on_click=toggle_attend, use_container_width=True): pass
+    
+    if st.session_state['show_attend_form']:
+        with st.container(border=True):
+            st.info("결과 조회를 위해 비밀번호를 꼭 기억하세요.")
+            with st.form("attend_form", clear_on_submit=True):
+                c1, c2 = st.columns(2)
+                with c1: name = st.text_input("이름 (필수)")
+                with c2: pw_att = st.text_input("비밀번호 (확인용)", type="password")
+                
+                type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근", "훈련"])
+                
+                c3, c4 = st.columns(2)
+                with c3: date_val = st.date_input("날짜")
+                with c4: time_val = st.text_input("시간/기간")
+                reason = st.text_input("사유")
+                
+                if st.form_submit_button("신청하기", use_container_width=True):
+                    if not name or not pw_att:
+                        st.warning("이름과 비밀번호는 필수입니다.")
+                    else:
+                        dt = f"{date_val} ({time_val})" if time_val else str(date_val)
+                        save_attendance(datetime.now().strftime("%Y-%m-%d"), name, type_val, dt, reason, pw_att)
+                        st.success("신청되었습니다.")
+                        st.session_state['show_attend_form'] = False
+                        st.rerun()
+    
+    st.divider()
+    st.write("#### 🔒 내 신청 결과 조회")
+    st.caption("이름과 비밀번호를 입력해야 결과를 볼 수 있습니다.")
+    
+    with st.form("my_attend_search"):
+        col_search1, col_search2 = st.columns([1,1])
+        with col_search1:
+            search_name = st.text_input("이름")
+        with col_search2:
+            search_pw = st.text_input("비밀번호", type="password")
+            
+        if st.form_submit_button("내역 조회", use_container_width=True):
+            df_a = load_data("근태신청")
+            if df_a.empty:
+                st.info("데이터가 없습니다.")
+            elif not search_name or not search_pw:
+                st.warning("이름과 비밀번호를 입력해주세요.")
+            else:
+                # 필터링 로직
+                my_result = df_a[
+                    (df_a['이름'] == search_name) & 
+                    (df_a['비밀번호'].astype(str) == str(search_pw))
+                ]
+                
+                if my_result.empty:
+                    st.error("일치하는 내역이 없습니다. (이름/비번 확인)")
+                else:
+                    st.success(f"총 {len(my_result)}건의 신청 내역이 있습니다.")
+                    for idx, row in my_result.iloc[::-1].iterrows():
+                        status = row.get("상태", "대기중")
+                        color = "orange"
+                        if status == "승인": color = "green"
+                        elif status == "반려": color = "red"
+                        
+                        with st.container(border=True):
+                            st.markdown(f"**{row['구분']}** - :{color}[**{status}**]")
+                            st.text(f"일시: {row['날짜및시간']}")
+                            st.caption(f"사유: {row['사유']} (신청일: {row['신청일']})")
+
+# 4. 관리자
+with tab4:
+    st.write("🔒 관리자 전용")
+    pw = st.text_input("비밀번호", type="password")
+    
+    if str(pw).strip() == str(st.secrets["admin_password"]).strip():
+        st.success("관리자 접속")
+        mode = st.radio("작업", ["📝 공지쓰기", "🔧 공지관리", "🔧 건의함관리", "✅ 근태승인/관리"])
+        
+        if mode == "📝 공지쓰기":
+            with st.form("new_n"):
+                t = st.text_input("제목")
+                c = st.text_area("내용")
+                i = st.checkbox("중요")
+                if st.form_submit_button("등록"):
+                    save_notice(datetime.now().strftime("%Y-%m-%d"), t, c, i)
                     st.toast("등록됨")
-
-        # 3-2. 공지사항 관리
-        elif mode == "🔧 공지사항 관리(수정/삭제)":
-            st.write("### 공지사항 수정 및 삭제")
+                    
+        elif mode == "🔧 공지관리":
             df = load_data("공지사항")
-            if df.empty:
-                st.info("데이터가 없습니다.")
-            else:
-                # 선택 박스 (제목으로 선택)
-                # 데이터프레임의 인덱스를 사용하여 고유 키 생성
-                options = [f"[{i}] {row['제목']} ({row['작성일']})" for i, row in df.iterrows()]
-                selected_option = st.selectbox("관리할 공지를 선택하세요", options)
-                
-                if selected_option:
-                    # 선택된 인덱스 추출
-                    selected_idx = int(selected_option.split(']')[0].replace('[', ''))
-                    row = df.loc[selected_idx]
-                    
-                    with st.form("edit_notice_form"):
-                        new_date = st.text_input("작성일", value=row['작성일'])
-                        new_title = st.text_input("제목", value=row['제목'])
-                        new_content = st.text_area("내용", value=row['내용'])
-                        new_important = st.checkbox("상단 강조", value=(str(row['중요']).upper() == 'TRUE'))
-                        
-                        col_edit, col_del = st.columns(2)
-                        with col_edit:
-                            if st.form_submit_button("수정 저장", use_container_width=True):
-                                update_notice(selected_idx, new_date, new_title, new_content, new_important)
-                                st.success("수정되었습니다.")
+            if not df.empty:
+                sel = st.selectbox("공지 선택", [f"[{i}] {r['제목']}" for i, r in df.iterrows()])
+                if sel:
+                    idx = int(sel.split(']')[0].replace('[',''))
+                    r = df.loc[idx]
+                    with st.form("edit_n"):
+                        nt = st.text_input("제목", value=r['제목'])
+                        nc = st.text_area("내용", value=r['내용'])
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            if st.form_submit_button("수정"):
+                                update_notice(idx, r['작성일'], nt, nc, str(r['중요'])=='TRUE')
                                 st.rerun()
-                        with col_del:
-                            if st.form_submit_button("🗑️ 삭제하기", type="primary", use_container_width=True):
-                                delete_row("공지사항", selected_idx)
-                                st.success("삭제되었습니다.")
+                        with c2:
+                            if st.form_submit_button("삭제", type="primary"):
+                                delete_row("공지사항", idx)
                                 st.rerun()
-
-        # 3-3. 건의사항 관리
-        elif mode == "🔧 건의사항 관리(수정/삭제/보기)":
-            st.write("### 건의사항 전체 보기 및 관리")
+                                
+        elif mode == "🔧 건의함관리":
             df_s = load_data("건의사항")
-            if df_s.empty:
+            if not df_s.empty:
+                st.dataframe(df_s)
+                sel_s = st.selectbox("삭제할 건의", [f"[{i}] {r['제목']}" for i, r in df_s.iterrows()])
+                if st.button("삭제하기", type="primary"):
+                    delete_row("건의사항", int(sel_s.split(']')[0].replace('[','')))
+                    st.rerun()
+
+        elif mode == "✅ 근태승인/관리":
+            st.write("### 근태 신청 관리")
+            df_a = load_data("근태신청")
+            if df_a.empty:
                 st.info("데이터가 없습니다.")
             else:
-                options_s = [f"[{i}] {row['제목']} - {row.get('작성자','익명')}" for i, row in df_s.iterrows()]
-                selected_option_s = st.selectbox("관리할 건의를 선택하세요", options_s)
+                pending = df_a[df_a['상태'] == '대기중']
+                if not pending.empty:
+                    st.warning(f"⚡ 승인 대기 중인 건이 {len(pending)}개 있습니다!")
                 
-                if selected_option_s:
-                    selected_idx_s = int(selected_option_s.split(']')[0].replace('[', ''))
-                    row_s = df_s.loc[selected_idx_s]
+                opts = [f"[{i}] {r['이름']} ({r['구분']}) - {r.get('상태','미정')}" for i, r in df_a.iterrows()]
+                sel_a = st.selectbox("처리할 내역 선택", opts)
+                
+                if sel_a:
+                    idx_a = int(sel_a.split(']')[0].replace('[',''))
+                    row_a = df_a.loc[idx_a]
                     
-                    st.info(f"작성자: {row_s.get('작성자', '익명')} | 비공개여부: {row_s.get('비공개')}")
+                    st.info(f"신청자: {row_a['이름']} | 구분: {row_a['구분']}")
+                    st.write(f"일시: {row_a['날짜및시간']}")
+                    st.write(f"사유: {row_a['사유']}")
+                    st.caption(f"비밀번호: {row_a.get('비밀번호', '없음')}") # 관리자는 비번 볼 수 있음
                     
-                    with st.form("edit_suggestion_form"):
-                        new_date_s = st.text_input("작성일", value=row_s['작성일'])
-                        new_title_s = st.text_input("제목", value=row_s['제목'])
-                        new_content_s = st.text_area("내용", value=row_s['내용'])
-                        new_author_s = st.text_input("작성자", value=row_s.get('작성자', '익명'))
-                        new_private_s = st.checkbox("비공개 설정", value=(str(row_s.get('비공개')).upper() == 'TRUE'))
-                        
-                        col_edit_s, col_del_s = st.columns(2)
-                        with col_edit_s:
-                            if st.form_submit_button("수정 저장", use_container_width=True):
-                                update_suggestion(selected_idx_s, new_date_s, new_title_s, new_content_s, new_author_s, new_private_s)
-                                st.success("수정되었습니다.")
-                                st.rerun()
-                        with col_del_s:
-                            if st.form_submit_button("🗑️ 삭제하기", type="primary", use_container_width=True):
-                                delete_row("건의사항", selected_idx_s)
-                                st.success("삭제되었습니다.")
-                                st.rerun()
+                    c_app, c_rej, c_del = st.columns(3)
+                    with c_app:
+                        if st.button("✅ 승인", use_container_width=True):
+                            update_attendance_status(idx_a, "승인")
+                            st.rerun()
+                    with c_rej:
+                        if st.button("⛔ 반려", use_container_width=True):
+                            update_attendance_status(idx_a, "반려")
+                            st.rerun()
+                    with c_del:
+                        if st.button("🗑️ 삭제", type="primary", use_container_width=True):
+                            delete_row("근태신청", idx_a)
+                            st.rerun()
 
-    elif password: # 비밀번호 틀렸을 때
-        st.error("비밀번호가 일치하지 않습니다.")
+    elif pw:
+        st.error("비밀번호 불일치")
