@@ -7,18 +7,45 @@ from datetime import datetime
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# --- [스타일] CSS (모바일 최적화 & 글자 크기) ---
+# --- [스타일] CSS 수정 (아이콘 깨짐 방지 & 모바일 최적화) ---
 st.markdown("""
 <style>
-    /* 전체 폰트 크기 증대 */
-    html, body, [class*="css"] { font-size: 18px; }
-    
-    /* 모바일(폭 768px 이하) 전용 설정 */
+    /* 1. 본문 텍스트 크기 조절 (안전한 방식) */
+    /* 아이콘 등 시스템 요소는 건드리지 않고, 우리가 쓴 글(Markdown)만 타겟팅 */
+    div[data-testid="stMarkdownContainer"] p, 
+    div[data-testid="stMarkdownContainer"] span, 
+    div[data-testid="stMarkdownContainer"] li {
+        font-size: 18px !important;
+        line-height: 1.6 !important; /* 줄간격 확보 */
+        word-break: keep-all !important; /* 단어 끊김 방지 */
+    }
+
+    /* 2. 모바일(폭 768px 이하) 전용 설정 */
     @media (max-width: 768px) {
-        h1 { font-size: 2.2rem !important; word-break: keep-all !important; }
-        h3 { font-size: 1.4rem !important; word-break: keep-all !important; }
-        p, div, span, textarea, input { font-size: 16px !important; word-break: keep-all !important; }
-        button { height: 3rem !important; }
+        /* 제목 크기 */
+        h1 { 
+            font-size: 2.0rem !important; 
+            word-break: keep-all !important;
+        }
+        /* 소제목 크기 */
+        h3 { 
+            font-size: 1.3rem !important; 
+            word-break: keep-all !important; 
+        }
+        /* 버튼 크기 키우기 (터치하기 편하게) */
+        .stButton button {
+            height: 3.0rem !important;
+            font-size: 18px !important;
+        }
+        /* 입력창 글씨 크기 (너무 작지 않게) */
+        .stTextInput input, .stTextArea textarea {
+            font-size: 16px !important;
+        }
+        /* [중요] 화살표 아이콘이 글자로 깨지는 현상 방지 */
+        .material-icons, span[class^="material"] {
+            font-family: 'Material Icons' !important;
+            font-size: inherit !important;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -47,10 +74,9 @@ def save_notice(date, title, content, is_important):
     sheet.append_row([date, title, content, "TRUE" if is_important else "FALSE"])
     st.cache_data.clear()
 
-# --- [함수] 제안 및 건의 저장 (수정됨) ---
+# --- [함수] 제안 및 건의 저장 ---
 def save_suggestion(date, title, content, author, is_private):
     sheet = get_worksheet("건의사항")
-    # 작성자, 비공개 여부 컬럼 추가
     sheet.append_row([date, title, content, author, "TRUE" if is_private else "FALSE"])
     st.cache_data.clear()
 
@@ -88,23 +114,23 @@ with tab1:
                 st.markdown(f"**{row['내용']}**")
 
 # ==========================================
-# 2. 제안 및 건의 탭 (공개 게시판 형태)
+# 2. 제안 및 건의 탭
 # ==========================================
 with tab2:
     st.write("### 🗣️ 자유 게시판 & 건의함")
-    st.caption("회사를 위한 좋은 아이디어 혹은 건의사항을 자유롭게 남겨주세요.")
+    st.caption("회사를 위한 좋은 아이디어를 자유롭게 남겨주세요.")
     
-    # 2-1. 글쓰기 접이식 메뉴 (Expander)
-    with st.expander("✍️ 새 글 작성하기 (터치)", expanded=False):
+    # 2-1. 글쓰기 접이식 메뉴
+    with st.expander("✍️ 새 제안 작성하기 (클릭)", expanded=False):
         with st.form("suggestion_form", clear_on_submit=True):
             col1, col2 = st.columns([1, 1])
             with col1:
                 author_input = st.text_input("작성자 (비워두면 익명)", placeholder="이름")
             with col2:
-                is_private = st.checkbox("🔒 관리자에게만 전송", help="체크하면 게시판에 공개되지 않고 관리자만 볼 수 있습니다.")
+                is_private = st.checkbox("🔒 관리자에게만 전송", help="체크하면 게시판에 공개되지 않습니다.")
             
-            s_title = st.text_input("제목", placeholder="제안 내용을 한 줄로 요약해 주세요")
-            s_content = st.text_area("내용", height=100, placeholder="상세 내용을 적어주세요")
+            s_title = st.text_input("제목", placeholder="제목을 입력하세요")
+            s_content = st.text_area("내용", height=100, placeholder="내용을 입력하세요")
             
             s_submitted = st.form_submit_button("등록하기", use_container_width=True)
             
@@ -132,40 +158,34 @@ with tab2:
         df_s = load_data("건의사항")
 
     if df_s.empty:
-        st.info("아직 등록된 제안이 없습니다. 첫 번째 의견을 남겨보세요!")
+        st.info("아직 등록된 제안이 없습니다.")
     else:
-        # 최신순 정렬
         df_s = df_s.iloc[::-1]
-        
         for index, row in df_s.iterrows():
-            # 비공개 글 필터링 (TRUE면 건너뜀)
             is_secret = str(row.get("비공개", "FALSE")).upper() == "TRUE"
             
             if not is_secret:
                 with st.container(border=True):
-                    # 제목 + 작성자(오른쪽 정렬 느낌)
                     st.markdown(f"**💬 {row['제목']}**")
-                    
                     col_info1, col_info2 = st.columns([1, 1])
                     with col_info1:
                         st.caption(f"👤 {row.get('작성자', '익명')}")
                     with col_info2:
                         st.caption(f"📅 {row['작성일']}")
-                    
                     st.text(row['내용'])
 
 # ==========================================
-# 3. 관리자 탭
+# 3. 관리자 탭 (비밀번호 오류 방지 코드 적용됨)
 # ==========================================
 with tab3:
     st.write("🔒 관리자 전용")
     password = st.text_input("관리자 비밀번호", type="password")
     
-    if password == st.secrets["admin_password"]:
+    # [수정] 비밀번호 비교 시 문자열(str)로 변환하고 공백 제거하여 오류 방지
+    if str(password).strip() == str(st.secrets["admin_password"]).strip():
         st.success("관리자 모드 접속")
         st.divider()
         
-        # 관리자용 - 공지 작성
         st.write("#### 📝 공지사항 작성")
         with st.form("notice_form", clear_on_submit=True):
             title = st.text_input("제목")
@@ -180,12 +200,10 @@ with tab3:
         
         st.divider()
         
-        # 관리자용 - 비공개 건의사항 확인하기 기능 추가
-        st.write("#### 🔒 비공개 건의함 (관리자만 보임)")
+        st.write("#### 🔒 비공개 건의함 확인")
         if st.button("비공개 건의사항 열기"):
              df_secret = load_data("건의사항")
              if not df_secret.empty:
-                 # 비공개인 것만 필터링
                  secret_msgs = df_secret[df_secret['비공개'].astype(str).str.upper() == 'TRUE']
                  if secret_msgs.empty:
                      st.info("비공개 건의사항이 없습니다.")
