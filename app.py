@@ -97,7 +97,7 @@ if 'show_write_form' not in st.session_state:
 def toggle_write_form():
     st.session_state['show_write_form'] = not st.session_state['show_write_form']
 
-tab1, tab2, tab3 = st.tabs(["📋 공지사항", "🗣️ 제안 및 건의", "⚙️ 관리자(수정/삭제)"])
+tab1, tab2, tab3 = st.tabs(["📋 공지사항", "🗣️ 제안 및 건의", "⚙️ 관리자"])
 
 # ==========================================
 # 1. 공지사항 탭
