@@ -92,10 +92,10 @@ with tab1:
 # ==========================================
 with tab2:
     st.write("### 🗣️ 자유 게시판 & 건의함")
-    st.caption("회사를 위한 좋은 아이디어를 자유롭게 남겨주세요.")
+    st.caption("회사를 위한 좋은 아이디어 혹은 건의사항을 자유롭게 남겨주세요.")
     
     # 2-1. 글쓰기 접이식 메뉴 (Expander)
-    with st.expander("✍️ 새 제안 작성하기 (클릭)", expanded=False):
+    with st.expander("✍️ 새 글 작성하기 (터치)", expanded=False):
         with st.form("suggestion_form", clear_on_submit=True):
             col1, col2 = st.columns([1, 1])
             with col1:
