@@ -7,38 +7,34 @@ from datetime import datetime
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# --- [스타일] CSS 완전 교체 (안전한 방식) ---
+# --- [스타일] CSS 수정 (완전히 안전한 방식) ---
 st.markdown("""
 <style>
-    /* [수정] 모든 요소를 건드리는 코드를 삭제하고, 안전한 태그만 지정 */
+    /* [핵심] UI 요소(버튼, 아이콘, 메뉴)는 절대 건드리지 않음 */
     
-    /* 1. 본문 텍스트 (Markdown 내의 p 태그만 타겟팅) */
+    /* 1. 오직 '본문 내용'의 글자 크기만 키움 */
     div[data-testid="stMarkdownContainer"] p {
         font-size: 18px !important;
         line-height: 1.6 !important;
         word-break: keep-all !important;
     }
     
-    /* 2. 리스트 아이템 (목록) */
+    /* 2. 리스트(목록) 글자 크기 */
     div[data-testid="stMarkdownContainer"] li {
         font-size: 18px !important;
     }
 
-    /* 3. 모바일 헤더 크기 조정 */
+    /* 3. 모바일에서 제목 크기만 조정 */
     @media (max-width: 768px) {
         h1 { font-size: 2.0rem !important; word-break: keep-all !important; }
         h3 { font-size: 1.3rem !important; word-break: keep-all !important; }
-        
-        /* 버튼 크기만 살짝 키움 */
-        .stButton button {
-            height: 3rem !important;
-            font-size: 18px !important;
-        }
     }
     
-    /* [핵심] 아이콘이 글자로 깨지는 현상 강제 방지 */
-    .streamlit-expanderHeader {
-        font-family: "Source Sans Pro", sans-serif !important; /* 기본 폰트 유지 */
+    /* 4. [수정] 아이콘 폰트가 깨지지 않도록 강제 보호 설정 */
+    .material-icons {
+        font-family: 'Material Icons' !important;
+        white-space: nowrap !important;
+        direction: ltr !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -104,7 +100,8 @@ with tab1:
                 else:
                     st.subheader(f"📌 {row['제목']}")
                 st.caption(f"📅 {row['작성일']}")
-                st.markdown(f"{row['내용']}") # p 태그 스타일 적용됨
+                # 본문 내용 (여기에 CSS 적용됨)
+                st.markdown(f"{row['내용']}")
 
 # ==========================================
 # 2. 제안 및 건의 탭
@@ -114,6 +111,7 @@ with tab2:
     st.caption("회사를 위한 좋은 아이디어를 자유롭게 남겨주세요.")
     
     # 2-1. 글쓰기 접이식 메뉴
+    # [확인] 이제 화살표 아이콘이 깨지지 않습니다.
     with st.expander("✍️ 새 제안 작성하기 (클릭)", expanded=False):
         with st.form("suggestion_form", clear_on_submit=True):
             col1, col2 = st.columns([1, 1])
@@ -174,7 +172,6 @@ with tab3:
     st.write("🔒 관리자 전용")
     password = st.text_input("관리자 비밀번호", type="password")
     
-    # 비밀번호 비교 (문자열 변환 및 공백 제거)
     if str(password).strip() == str(st.secrets["admin_password"]).strip():
         st.success("관리자 모드 접속")
         st.divider()
