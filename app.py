@@ -7,7 +7,7 @@ from datetime import datetime
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# --- [스타일] CSS 수정 (화살표 삭제 & 폰트 겹침 해결) ---
+# --- [스타일] CSS (폰트 크기만 깔끔하게 키움) ---
 st.markdown("""
 <style>
     /* 1. 본문 텍스트 설정 */
@@ -21,23 +21,13 @@ st.markdown("""
     @media (max-width: 768px) {
         h1 { font-size: 2.0rem !important; word-break: keep-all !important; }
         h3 { font-size: 1.3rem !important; word-break: keep-all !important; }
-    }
-    
-    /* [핵심] 화살표 아이콘(toggle icon)을 아예 삭제해서 안 보이게 함 */
-    div[data-testid="stExpanderToggleIcon"] {
-        display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        width: 0 !important;
-    }
-    
-    /* 혹시 모를 잔여 아이콘 숨김 */
-    .streamlit-expanderHeader svg { display: none !important; }
-    .streamlit-expanderHeader .material-icons { display: none !important; }
-    
-    /* 아이콘이 사라진 만큼 왼쪽 여백을 없애서 글자를 당김 */
-    .streamlit-expanderHeader {
-        padding-left: 0 !important;
+        
+        /* 버튼 크기 넉넉하게 */
+        div.stButton > button {
+            width: 100%;
+            height: 3.5rem;
+            font-size: 18px;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -72,8 +62,14 @@ def save_suggestion(date, title, content, author, is_private):
     st.cache_data.clear()
 
 # --- [UI] 메인 화면 ---
-# [확인용] 제목이 바뀌어야 코드가 적용된 것입니다!
-st.title("🏢 제이유 사내광장 (업데이트됨)")
+st.title("🏢 제이유 사내광장")
+
+# 세션 상태 초기화 (버튼 눌렀는지 안 눌렀는지 기억)
+if 'show_write_form' not in st.session_state:
+    st.session_state['show_write_form'] = False
+
+def toggle_write_form():
+    st.session_state['show_write_form'] = not st.session_state['show_write_form']
 
 tab1, tab2, tab3 = st.tabs(["📋 공지사항", "🗣️ 제안 및 건의", "⚙️ 관리자 작성"])
 
@@ -104,30 +100,40 @@ with tab2:
     st.write("### 🗣️ 자유 게시판 & 건의함")
     st.caption("자유롭게 의견을 남겨주세요.")
     
-    # [수정] 화살표 없이 글자만 클릭하면 열림
-    with st.expander("✍️ 제안 및 건의사항 작성하기 (터치)", expanded=False):
-        with st.form("suggestion_form", clear_on_submit=True):
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                author_input = st.text_input("작성자", placeholder="이름 (생략가능)")
-            with col2:
-                is_private = st.checkbox("🔒 관리자에게만", help="비공개 건의")
-            s_title = st.text_input("제목", placeholder="제목 입력")
-            s_content = st.text_area("내용", height=100, placeholder="내용 입력")
-            if st.form_submit_button("등록", use_container_width=True):
-                if not s_content:
-                    st.warning("내용을 입력하세요.")
-                else:
-                    final_author = author_input if author_input.strip() else "익명"
-                    now = datetime.now().strftime("%Y-%m-%d %H:%M")
-                    save_suggestion(now, s_title, s_content, final_author, is_private)
-                    st.success("등록되었습니다.")
-                    st.rerun()
+    # [핵심 변경] 문제의 'Expander(접이식 메뉴)' 삭제!
+    # 대신 깔끔한 '버튼'으로 교체하여 글자 겹침 원천 차단
+    if st.button("✍️ 제안 및 건의사항 작성하기 (터치)", on_click=toggle_write_form, use_container_width=True):
+        pass
+
+    # 버튼을 눌러서 상태가 True일 때만 입력폼을 보여줌
+    if st.session_state['show_write_form']:
+        with st.container(border=True):
+            st.info("작성 후 '등록'을 누르면 닫힙니다.")
+            with st.form("suggestion_form", clear_on_submit=True):
+                col1, col2 = st.columns([1, 1])
+                with col1:
+                    author_input = st.text_input("작성자", placeholder="이름 (생략가능)")
+                with col2:
+                    is_private = st.checkbox("🔒 관리자에게만", help="비공개 건의")
+                s_title = st.text_input("제목", placeholder="제목 입력")
+                s_content = st.text_area("내용", height=100, placeholder="내용 입력")
+                
+                if st.form_submit_button("등록", use_container_width=True):
+                    if not s_content:
+                        st.warning("내용을 입력하세요.")
+                    else:
+                        final_author = author_input if author_input.strip() else "익명"
+                        now = datetime.now().strftime("%Y-%m-%d %H:%M")
+                        save_suggestion(now, s_title, s_content, final_author, is_private)
+                        st.success("등록되었습니다.")
+                        st.session_state['show_write_form'] = False # 등록 후 닫기
+                        st.rerun()
 
     st.divider()
     if st.button("🔄 게시판 새로고침", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
+        
     df_s = load_data("건의사항")
     if df_s.empty:
         st.info("등록된 글이 없습니다.")
