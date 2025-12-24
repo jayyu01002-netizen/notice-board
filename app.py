@@ -7,16 +7,20 @@ from datetime import datetime
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# --- [스타일] CSS 수정 (완전히 안전한 방식) ---
+# --- [스타일] CSS 긴급 수정 (아이콘 깨짐 원인 제거) ---
 st.markdown("""
 <style>
-    /* [핵심] UI 요소(버튼, 아이콘, 메뉴)는 절대 건드리지 않음 */
-    
-    /* 1. 오직 '본문 내용'의 글자 크기만 키움 */
+    /* [문제 원인 해결]
+       이전에는 'word-break: keep-all'을 너무 넓게 적용해서
+       아이콘(Ligature)이 글자로 분해되는 현상이 있었습니다.
+       이번에는 딱 '본문(p)'에만 적용하여 아이콘을 보호합니다.
+    */
+
+    /* 1. 본문 내용 (글자 크기 키움 + 한글 줄바꿈 방지) */
     div[data-testid="stMarkdownContainer"] p {
         font-size: 18px !important;
         line-height: 1.6 !important;
-        word-break: keep-all !important;
+        word-break: keep-all !important; /* 본문만 적용! */
     }
     
     /* 2. 리스트(목록) 글자 크기 */
@@ -24,17 +28,22 @@ st.markdown("""
         font-size: 18px !important;
     }
 
-    /* 3. 모바일에서 제목 크기만 조정 */
+    /* 3. 모바일 제목 크기 조정 */
     @media (max-width: 768px) {
         h1 { font-size: 2.0rem !important; word-break: keep-all !important; }
         h3 { font-size: 1.3rem !important; word-break: keep-all !important; }
     }
     
-    /* 4. [수정] 아이콘 폰트가 깨지지 않도록 강제 보호 설정 */
+    /* 4. [핵심] Expander 헤더(아이콘 있는 곳)는 줄바꿈 설정을 '기본값'으로 강제 초기화 */
+    .streamlit-expanderHeader {
+        word-break: normal !important; /* 아이콘이 깨지지 않게 함 */
+        font-size: 16px !important;
+    }
+    
+    /* 5. 아이콘 폰트 강제 지정 (혹시 모를 대비) */
     .material-icons {
         font-family: 'Material Icons' !important;
-        white-space: nowrap !important;
-        direction: ltr !important;
+        word-break: normal !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -100,7 +109,7 @@ with tab1:
                 else:
                     st.subheader(f"📌 {row['제목']}")
                 st.caption(f"📅 {row['작성일']}")
-                # 본문 내용 (여기에 CSS 적용됨)
+                # 본문 내용
                 st.markdown(f"{row['내용']}")
 
 # ==========================================
@@ -111,8 +120,7 @@ with tab2:
     st.caption("회사를 위한 좋은 아이디어를 자유롭게 남겨주세요.")
     
     # 2-1. 글쓰기 접이식 메뉴
-    # [확인] 이제 화살표 아이콘이 깨지지 않습니다.
-    with st.expander("✍️ 새 제안 작성하기 (클릭)", expanded=False):
+    with st.expander("✍️ 새 제안 및 건의사항 작성하기 (클릭)", expanded=False):
         with st.form("suggestion_form", clear_on_submit=True):
             col1, col2 = st.columns([1, 1])
             with col1:
