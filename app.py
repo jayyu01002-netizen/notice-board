@@ -7,7 +7,7 @@ from datetime import datetime
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# --- [스타일] CSS 수정 (아이콘 깨짐 방지 강력 모드) ---
+# --- [스타일] CSS 수정 (화살표 제거) ---
 st.markdown("""
 <style>
     /* 1. 본문 텍스트 (글자 크기 키움 + 한글 줄바꿈 방지) */
@@ -28,30 +28,17 @@ st.markdown("""
         h3 { font-size: 1.3rem !important; word-break: keep-all !important; }
     }
     
-    /* [핵심 해결책] 화살표 아이콘이 글자로 깨지는 현상 강력 방지 */
-    /* 아이콘이 들어있는 공간의 줄바꿈 설정을 강제로 '기본(normal)'로 돌림 */
-    .streamlit-expanderHeader {
-        word-break: normal !important; 
+    /* [핵심 해결] 요청하신 대로 화살표 아이콘을 아예 안 보이게 숨김(삭제) 처리 */
+    .streamlit-expanderHeader svg {
+        display: none !important;
+    }
+    div[data-testid="stExpanderToggleIcon"] {
+        display: none !important;
     }
     
-    /* 아이콘 자체에 대한 강력한 스타일 지정 (글자로 풀리지 않게 고정) */
-    .streamlit-expanderHeader .material-icons, .material-icons {
-        font-family: 'Material Icons' !important;
-        font-weight: normal !important;
-        font-style: normal !important;
-        display: inline-block !important;
-        line-height: 1 !important;
-        text-transform: none !important;
-        letter-spacing: normal !important;
-        word-wrap: normal !important;
-        white-space: nowrap !important;
-        direction: ltr !important;
-        /* 브라우저별 폰트 렌더링 최적화 */
-        -webkit-font-smoothing: antialiased;
-        text-rendering: optimizeLegibility;
-        -moz-osx-font-smoothing: grayscale;
-        font-feature-settings: 'liga';
-        word-break: normal !important; /* 여기서 keep-all을 무력화시킴 */
+    /* 아이콘이 사라진 만큼 왼쪽 여백 정리 */
+    .streamlit-expanderHeader {
+        padding-left: 0 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -128,7 +115,8 @@ with tab2:
     st.caption("회사를 위한 좋은 아이디어를 자유롭게 남겨주세요.")
     
     # 2-1. 글쓰기 접이식 메뉴
-    with st.expander("✍️ 제안 및 건의사항 작성하기 (클릭)", expanded=False):
+    # 화살표 없이 깔끔하게 '글자'만 클릭하면 열리도록 변경
+    with st.expander("✍️ 제안 및 건의사항 작성하기 (터치)", expanded=False):
         with st.form("suggestion_form", clear_on_submit=True):
             col1, col2 = st.columns([1, 1])
             with col1:
