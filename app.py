@@ -7,56 +7,38 @@ from datetime import datetime
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# --- [스타일] CSS 수정 (아이콘 깨짐 해결을 위한 안전한 스타일링) ---
+# --- [스타일] CSS 완전 교체 (안전한 방식) ---
 st.markdown("""
 <style>
-    /* [핵심 수정] 모든 요소(class*="css")를 건드리는 위험한 코드 삭제 */
-    /* 대신, 꼭 필요한 텍스트 요소만 골라서 크기를 키웁니다. */
-
-    /* 1. 본문 텍스트 (문단, 목록, span) */
-    div.stMarkdown p, div.stMarkdown li, div.stMarkdown span {
+    /* [수정] 모든 요소를 건드리는 코드를 삭제하고, 안전한 태그만 지정 */
+    
+    /* 1. 본문 텍스트 (Markdown 내의 p 태그만 타겟팅) */
+    div[data-testid="stMarkdownContainer"] p {
         font-size: 18px !important;
         line-height: 1.6 !important;
         word-break: keep-all !important;
     }
-
-    /* 2. 입력창 글자 크기 (제목, 내용 입력칸) */
-    input[type="text"], textarea {
-        font-size: 16px !important;
+    
+    /* 2. 리스트 아이템 (목록) */
+    div[data-testid="stMarkdownContainer"] li {
+        font-size: 18px !important;
     }
 
-    /* 3. 버튼 글자 크기 */
-    div.stButton > button {
-        font-size: 16px !important;
-    }
-
-    /* 4. 모바일 화면(폭 768px 이하) 설정 */
+    /* 3. 모바일 헤더 크기 조정 */
     @media (max-width: 768px) {
-        /* 제목 (H1) */
-        h1 { 
-            font-size: 2.0rem !important; 
-            word-break: keep-all !important;
-        }
-        /* 소제목 (H3) */
-        h3 { 
-            font-size: 1.3rem !important; 
-            word-break: keep-all !important; 
-        }
-        /* 버튼 높이와 글자 크기 확보 */
-        div.stButton > button {
-            height: 3.2rem !important;
+        h1 { font-size: 2.0rem !important; word-break: keep-all !important; }
+        h3 { font-size: 1.3rem !important; word-break: keep-all !important; }
+        
+        /* 버튼 크기만 살짝 키움 */
+        .stButton button {
+            height: 3rem !important;
             font-size: 18px !important;
         }
     }
     
-    /* [중요] 아이콘(화살표 등)이 글자로 깨지는 것 방지 */
-    /* expander(접이식 메뉴) 아이콘 강제 보호 */
-    .streamlit-expanderHeader svg {
-        display: block !important; /* 아이콘이 숨겨지지 않게 */
-    }
-    .material-icons {
-        font-family: 'Material Icons' !important;
-        font-size: 24px !important;
+    /* [핵심] 아이콘이 글자로 깨지는 현상 강제 방지 */
+    .streamlit-expanderHeader {
+        font-family: "Source Sans Pro", sans-serif !important; /* 기본 폰트 유지 */
     }
 </style>
 """, unsafe_allow_html=True)
@@ -122,7 +104,7 @@ with tab1:
                 else:
                     st.subheader(f"📌 {row['제목']}")
                 st.caption(f"📅 {row['작성일']}")
-                st.markdown(f"**{row['내용']}**")
+                st.markdown(f"{row['내용']}") # p 태그 스타일 적용됨
 
 # ==========================================
 # 2. 제안 및 건의 탭
@@ -183,7 +165,7 @@ with tab2:
                         st.caption(f"👤 {row.get('작성자', '익명')}")
                     with col_info2:
                         st.caption(f"📅 {row['작성일']}")
-                    st.text(row['내용'])
+                    st.markdown(f"{row['내용']}")
 
 # ==========================================
 # 3. 관리자 탭
@@ -192,7 +174,7 @@ with tab3:
     st.write("🔒 관리자 전용")
     password = st.text_input("관리자 비밀번호", type="password")
     
-    # 비밀번호 비교 (공백 제거 후 문자열 비교)
+    # 비밀번호 비교 (문자열 변환 및 공백 제거)
     if str(password).strip() == str(st.secrets["admin_password"]).strip():
         st.success("관리자 모드 접속")
         st.divider()
