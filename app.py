@@ -3,13 +3,14 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
-import uuid # [추가] 고유 ID 생성을 위해 사용
+import uuid
+import pytz  # [필수] 한국 시간 변환을 위한 라이브러리
 from streamlit_calendar import calendar
 
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# --- [스타일] CSS (모바일 강제 렌더링 수정 포함) ---
+# --- [스타일] CSS (모바일 강제 렌더링 + 폰트) ---
 st.markdown("""
 <style>
     div[data-testid="stMarkdownContainer"] p {
@@ -26,7 +27,7 @@ st.markdown("""
         font-size: 1.2em !important;
     }
     
-    /* [핵심 수정] 모바일에서 아이프레임(달력) 높이 강제 고정 */
+    /* 모바일에서 달력 높이 강제 고정 */
     @media (max-width: 768px) {
         h1 { font-size: 2.0rem !important; word-break: keep-all !important; }
         div.stButton > button {
@@ -34,7 +35,6 @@ st.markdown("""
             height: 3.5rem;
             font-size: 18px;
         }
-        /* Streamlit Custom Component의 iframe 강제 확장 */
         iframe[title="streamlit_calendar.calendar"] {
             min-height: 600px !important;
             height: 600px !important;
@@ -43,6 +43,12 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+# --- [함수] 한국 시간 구하기 ---
+def get_korea_time():
+    # 서버 시간이 어디든 상관없이 무조건 한국 시간(KST)을 반환
+    kst = pytz.timezone('Asia/Seoul')
+    return datetime.now(kst).strftime("%Y-%m-%d")
 
 # --- [함수] 구글 시트 연결 ---
 def get_worksheet(sheet_name):
@@ -63,20 +69,22 @@ def load_data(sheet_name):
     except Exception as e:
         return pd.DataFrame()
 
-# --- [함수] 저장/수정/삭제 로직 ---
-def save_notice(date, title, content, is_important):
+# --- [함수] 저장/수정/삭제 로직 (한국 시간 적용) ---
+def save_notice(title, content, is_important):
     sheet = get_worksheet("공지사항")
-    sheet.append_row([date, title, content, "TRUE" if is_important else "FALSE"])
+    # 작성일 저장 시 get_korea_time() 사용
+    sheet.append_row([get_korea_time(), title, content, "TRUE" if is_important else "FALSE"])
     st.cache_data.clear()
 
-def save_suggestion(date, title, content, author, is_private, password):
+def save_suggestion(title, content, author, is_private, password):
     sheet = get_worksheet("건의사항")
-    sheet.append_row([date, title, content, author, "TRUE" if is_private else "FALSE", str(password)])
+    sheet.append_row([get_korea_time(), title, content, author, "TRUE" if is_private else "FALSE", str(password)])
     st.cache_data.clear()
 
-def save_attendance(date, name, type_val, target_time, reason, password):
+def save_attendance(name, type_val, target_time, reason, password):
     sheet = get_worksheet("근태신청")
-    sheet.append_row([date, name, type_val, target_time, reason, "대기중", str(password)])
+    # 신청일(작성일) 저장 시 get_korea_time() 사용
+    sheet.append_row([get_korea_time(), name, type_val, target_time, reason, "대기중", str(password)])
     st.cache_data.clear()
 
 def delete_row(sheet_name, row_idx):
@@ -102,7 +110,6 @@ st.title("🏢 제이유 사내광장")
 
 if 'show_sugg_form' not in st.session_state: st.session_state['show_sugg_form'] = False
 if 'show_attend_form' not in st.session_state: st.session_state['show_attend_form'] = False
-# [추가] 모바일 렌더링 이슈 해결을 위한 초기 키 설정
 if 'calendar_key' not in st.session_state: st.session_state['calendar_key'] = str(uuid.uuid4())
 
 def toggle_sugg(): st.session_state['show_sugg_form'] = not st.session_state['show_sugg_form']
@@ -150,7 +157,8 @@ with tab2:
                     if not content or not author or not pw_input:
                         st.warning("작성자, 비밀번호, 내용을 모두 입력하세요.")
                     else:
-                        save_suggestion(datetime.now().strftime("%Y-%m-%d"), title, content, author, private, pw_input)
+                        # 한국 시간 적용
+                        save_suggestion(title, content, author, private, pw_input)
                         st.success("등록됨")
                         st.session_state['show_sugg_form'] = False
                         st.rerun()
@@ -185,7 +193,7 @@ with tab2:
                                 st.markdown(r['내용'])
                                 st.caption(r['작성일'])
 
-# 3. 근무표 (모바일 CSS 적용됨)
+# 3. 근무표
 with tab3:
     st.write("### 📆 승인된 근무/휴가 현황")
     st.caption("관리자가 승인한 일정은 달력에 표시됩니다.")
@@ -194,7 +202,6 @@ with tab3:
     with c_btn:
         if st.button("🔄 근무표 새로고침", key="cal_refresh", use_container_width=True):
             st.cache_data.clear()
-            # 새로고침 시 키값을 바꿔서 강제 리렌더링 유도
             st.session_state['calendar_key'] = str(uuid.uuid4())
             st.rerun()
     with c_view:
@@ -244,14 +251,11 @@ with tab3:
             },
             "initialView": "dayGridMonth",
             "locale": "ko",
-            "height": "750px",  # 데스크탑용 높이 (모바일은 CSS로 덮어씌워짐)
+            "height": "750px", 
             "contentHeight": "auto",
-            "dayMaxEvents": 3   # 하루에 3개까지만 표시 (더보기 링크 생성)
+            "dayMaxEvents": 3 
         }
         
-        # [핵심] 키값에 랜덤 UUID를 포함시켜 초기 로딩 실패 시 
-        # 사용자가 새로고침 등을 할 때 무조건 컴포넌트를 다시 그리게 함
-        # + len(events)를 통해 데이터 변경시에도 갱신
         dynamic_key = f"cal_{st.session_state['calendar_key']}_{len(events)}"
         
         calendar(
@@ -296,7 +300,9 @@ with tab4:
                 type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근", "예비군/훈련"])
                 
                 c3, c4 = st.columns(2)
-                with c3: date_val = st.date_input("날짜")
+                # [수정] 날짜 선택기의 기본값을 한국 시간 오늘로 설정
+                kst_now = datetime.now(pytz.timezone('Asia/Seoul'))
+                with c3: date_val = st.date_input("날짜", value=kst_now)
                 with c4: time_val = st.text_input("시간/기간")
                 reason = st.text_input("사유")
                 
@@ -305,7 +311,8 @@ with tab4:
                         st.warning("이름과 비밀번호는 필수입니다.")
                     else:
                         dt = f"{date_val} ({time_val})" if time_val else str(date_val)
-                        save_attendance(datetime.now().strftime("%Y-%m-%d"), name, type_val, dt, reason, pw_att)
+                        # 한국 시간 적용
+                        save_attendance(name, type_val, dt, reason, pw_att)
                         st.success("신청되었습니다.")
                         st.session_state['show_attend_form'] = False
                         st.rerun()
@@ -355,7 +362,8 @@ with tab5:
                 c = st.text_area("내용")
                 i = st.checkbox("중요")
                 if st.form_submit_button("등록"):
-                    save_notice(datetime.now().strftime("%Y-%m-%d"), t, c, i)
+                    # 한국 시간 적용
+                    save_notice(t, c, i)
                     st.toast("등록됨")
                     
         elif mode == "🔧 공지관리":
