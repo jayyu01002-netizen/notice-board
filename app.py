@@ -21,6 +21,9 @@ st.markdown("""
         font-size: 0.85em !important;
         color: white !important;
     }
+    .fc-toolbar-title {
+        font-size: 1.2em !important;
+    }
     @media (max-width: 768px) {
         h1 { font-size: 2.0rem !important; word-break: keep-all !important; }
         div.stButton > button {
@@ -90,6 +93,7 @@ st.title("🏢 제이유 사내광장")
 
 if 'show_sugg_form' not in st.session_state: st.session_state['show_sugg_form'] = False
 if 'show_attend_form' not in st.session_state: st.session_state['show_attend_form'] = False
+if 'view_mode' not in st.session_state: st.session_state['view_mode'] = "달력" # 보기 모드 상태 저장
 
 def toggle_sugg(): st.session_state['show_sugg_form'] = not st.session_state['show_sugg_form']
 def toggle_attend(): st.session_state['show_attend_form'] = not st.session_state['show_attend_form']
@@ -171,26 +175,32 @@ with tab2:
                                 st.markdown(r['내용'])
                                 st.caption(r['작성일'])
 
-# 3. 근무표 (수정됨: 높이 설정 변경 및 리스트 뷰 추가)
+# 3. 근무표 (수정됨: 초기 로딩 문제 해결)
 with tab3:
     st.write("### 📆 승인된 근무/휴가 현황")
     st.caption("관리자가 승인한 일정은 달력에 표시됩니다.")
     
-    # 상단 버튼 및 뷰 선택
+    # 상단 컨트롤바
     c_btn, c_view = st.columns([0.6, 0.4])
     with c_btn:
         if st.button("🔄 근무표 새로고침", key="cal_refresh", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
     with c_view:
-        view_type = st.radio("보기", ["달력", "목록"], horizontal=True, label_visibility="collapsed")
+        # Session State와 연동하여 상태 유지
+        view_type = st.radio(
+            "보기", ["달력", "목록"], 
+            horizontal=True, 
+            label_visibility="collapsed",
+            key="view_mode"
+        )
 
     df_cal = load_data("근태신청")
     events = []
-
+    
+    # 데이터 처리 및 이벤트 생성
     if not df_cal.empty:
         try:
-            # 1. 상태값 공백 제거 후 '승인' 필터링 (중요)
             df_cal['상태'] = df_cal['상태'].astype(str).str.strip()
             approved_df = df_cal[df_cal['상태'] == '승인']
             
@@ -201,9 +211,8 @@ with tab3:
                 elif "훈련" in leave_type: color = "#2E8B57"
                 else: color = "#3182CE"
 
-                # 2. 날짜 파싱 (앞부분만 추출)
                 raw_date = str(row.get('날짜및시간', '')).strip()
-                clean_date = raw_date.split(' ')[0] # "2025-01-01 (설명)" -> "2025-01-01"
+                clean_date = raw_date.split(' ')[0]
                 
                 if len(clean_date) >= 10:
                     events.append({
@@ -214,12 +223,12 @@ with tab3:
                         "borderColor": color,
                         "allDay": True
                     })
-        except Exception as e:
-            st.error(f"데이터 로드 중 오류: {e}")
+        except Exception:
+            pass
 
-    # 화면 표시
+    # 화면 렌더링
     if view_type == "달력":
-        # 달력 옵션 (높이를 숫자로 설정)
+        # [핵심 수정 1] 달력 옵션에서 height를 "px" 문자열로 지정
         calendar_options = {
             "headerToolbar": {
                 "left": "today prev,next",
@@ -228,14 +237,18 @@ with tab3:
             },
             "initialView": "dayGridMonth",
             "locale": "ko",
-            "height": 700,  # 숫자로 입력 (중요)
+            "height": "750px",  # 문자열로 "px" 명시 (중요)
             "contentHeight": "auto"
         }
-        # 다크모드 대응 배경색 흰색 고정
+        
+        # [핵심 수정 2] key를 'events' 길이에 따라 동적으로 변경
+        # 데이터가 로드되거나 변경되면 key가 바뀌면서 컴포넌트를 강제 재생성(Re-mount)하여 화면에 그립니다.
+        dynamic_key = f"calendar_widget_{len(events)}"
+        
         calendar(
             events=events,
             options=calendar_options,
-            key="office_calendar",
+            key=dynamic_key, 
             custom_css="""
             .fc {
                 background-color: white;
@@ -243,12 +256,11 @@ with tab3:
                 border-radius: 8px;
                 color: black;
             }
-            .fc-toolbar-title { color: black !important; }
             """
         )
     else:
-        # 목록으로 보기 (달력이 안 될 때 대비)
-        if not df_cal.empty and not approved_df.empty:
+        # 목록 보기
+        if not df_cal.empty and 'approved_df' in locals() and not approved_df.empty:
             approved_df = approved_df.sort_values(by='날짜및시간', ascending=False)
             for idx, row in approved_df.iterrows():
                 with st.container(border=True):
@@ -320,7 +332,7 @@ with tab4:
                             st.text(f"일시: {row['날짜및시간']}")
                             st.caption(f"사유: {row['사유']} (신청일: {row['신청일']})")
 
-# 5. 관리자 (수정됨: 대기중만 표시 + 승인/반려 시 목록에서 제거)
+# 5. 관리자
 with tab5:
     st.write("🔒 관리자 전용")
     pw = st.text_input("비밀번호", type="password")
@@ -374,8 +386,6 @@ with tab5:
             if df_a.empty:
                 st.info("데이터가 없습니다.")
             else:
-                # [핵심] '대기중' 상태인 것만 목록에 띄움
-                # 승인/반려 처리하면 상태가 바뀌므로 목록에서 사라짐 (데이터는 보존)
                 df_a['상태'] = df_a['상태'].astype(str).str.strip()
                 pending_df = df_a[df_a['상태'] == '대기중']
                 
@@ -401,12 +411,12 @@ with tab5:
                         with c_app:
                             if st.button("✅ 승인 (달력반영)", use_container_width=True):
                                 update_attendance_status(idx_a, "승인")
-                                st.success("승인됨. 목록에서 사라집니다.")
+                                st.success("승인됨.")
                                 st.rerun()
                         with c_rej:
                             if st.button("⛔ 반려", use_container_width=True):
                                 update_attendance_status(idx_a, "반려")
-                                st.warning("반려됨. 목록에서 사라집니다.")
+                                st.warning("반려됨.")
                                 st.rerun()
                         with c_del:
                             if st.button("🗑️ 영구 삭제", type="primary", use_container_width=True):
