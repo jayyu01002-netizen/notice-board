@@ -4,6 +4,13 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
+# [추가] 캘린더 라이브러리 임포트 (설치 필요: pip install streamlit-calendar)
+try:
+    from streamlit_calendar import calendar
+except ImportError:
+    st.error("⚠️ 'streamlit-calendar' 라이브러리가 설치되지 않았습니다. requirements.txt에 추가해주세요.")
+    st.stop()
+
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
@@ -41,13 +48,12 @@ def load_data(sheet_name):
     try:
         sheet = get_worksheet(sheet_name)
         data = sheet.get_all_records()
-        # 모든 데이터는 문자열로 변환하여 비교 오류 방지
         df = pd.DataFrame(data)
         return df.astype(str) 
     except Exception as e:
         return pd.DataFrame()
 
-# --- [함수] 저장 로직 (비밀번호 추가됨) ---
+# --- [함수] 저장 로직 ---
 def save_notice(date, title, content, is_important):
     sheet = get_worksheet("공지사항")
     sheet.append_row([date, title, content, "TRUE" if is_important else "FALSE"])
@@ -55,13 +61,11 @@ def save_notice(date, title, content, is_important):
 
 def save_suggestion(date, title, content, author, is_private, password):
     sheet = get_worksheet("건의사항")
-    # F열: 비밀번호 추가
     sheet.append_row([date, title, content, author, "TRUE" if is_private else "FALSE", str(password)])
     st.cache_data.clear()
 
 def save_attendance(date, name, type_val, target_time, reason, password):
     sheet = get_worksheet("근태신청")
-    # G열: 비밀번호 추가
     sheet.append_row([date, name, type_val, target_time, reason, "대기중", str(password)])
     st.cache_data.clear()
 
@@ -80,7 +84,6 @@ def update_notice(row_idx, date, title, content, is_important):
 
 def update_attendance_status(row_idx, new_status):
     sheet = get_worksheet("근태신청")
-    # 상태 컬럼은 F열(6번째)
     sheet.update_cell(row_idx + 2, 6, new_status)
     st.cache_data.clear()
 
@@ -94,7 +97,8 @@ if 'show_attend_form' not in st.session_state: st.session_state['show_attend_for
 def toggle_sugg(): st.session_state['show_sugg_form'] = not st.session_state['show_sugg_form']
 def toggle_attend(): st.session_state['show_attend_form'] = not st.session_state['show_attend_form']
 
-tab1, tab2, tab3, tab4 = st.tabs(["📋 공지", "🗣️ 건의", "📅 근태신청", "⚙️ 관리자"])
+# 탭 구성 (근무표 탭 추가됨)
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 공지", "🗣️ 건의", "📆 근무표", "📅 근태신청", "⚙️ 관리자"])
 
 # 1. 공지사항
 with tab1:
@@ -141,9 +145,7 @@ with tab2:
                         st.rerun()
     st.divider()
     
-    # 건의사항 조회 모드 (공개글 or 내글 찾기)
-    search_mode = st.radio("보기 모드", ["공개 게시판 보기", "🔒 내 건의사항 조회 (비공개 포함)"], horizontal=True)
-    
+    search_mode = st.radio("보기 모드", ["공개 게시판 보기", "🔒 내 건의사항 조회"], horizontal=True)
     df_s = load_data("건의사항")
     
     if search_mode == "공개 게시판 보기":
@@ -155,18 +157,13 @@ with tab2:
                         st.caption(f"👤 {row.get('작성자','익명')} | 📅 {row['작성일']}")
                         st.markdown(f"{row['내용']}")
     else:
-        # 내 글 조회
         with st.form("my_sugg_search"):
             c1, c2 = st.columns(2)
             with c1: my_name = st.text_input("작성자 이름")
             with c2: my_pw = st.text_input("비밀번호", type="password")
             if st.form_submit_button("조회"):
                 if not df_s.empty and my_name and my_pw:
-                    # 이름과 비밀번호가 일치하는 행만 필터링
-                    my_rows = df_s[
-                        (df_s['작성자'] == my_name) & 
-                        (df_s['비밀번호'].astype(str) == str(my_pw))
-                    ]
+                    my_rows = df_s[(df_s['작성자'] == my_name) & (df_s['비밀번호'].astype(str) == str(my_pw))]
                     if my_rows.empty:
                         st.error("일치하는 글이 없습니다.")
                     else:
@@ -177,8 +174,60 @@ with tab2:
                                 st.markdown(r['내용'])
                                 st.caption(r['작성일'])
 
-# 3. 근태신청 (철저한 보안 적용)
+# 3. 캘린더 (근무표) - NEW!
 with tab3:
+    st.write("### 📆 월간 근무/휴가 현황")
+    st.caption("관리자가 '승인'한 내역만 달력에 표시됩니다.")
+    
+    if st.button("🔄 달력 새로고침", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+
+    df_cal = load_data("근태신청")
+    events = []
+    
+    if not df_cal.empty:
+        # 상태가 '승인'인 것만 필터링
+        approved_df = df_cal[df_cal['상태'] == '승인']
+        
+        for index, row in approved_df.iterrows():
+            try:
+                # 저장된 날짜 포맷 "YYYY-MM-DD (시간)" 에서 앞부분 날짜만 추출
+                full_date_str = str(row['날짜및시간'])
+                date_only = full_date_str.split(' ')[0] # 공백 기준으로 앞부분만 가져옴
+                
+                # 근태 종류에 따른 색상 설정
+                leave_type = row['구분']
+                color = "#808080" # 기본 회색
+                if "연차" in leave_type: color = "#FF4B4B" # 빨강
+                elif "반차" in leave_type: color = "#FFA500" # 주황
+                elif "외출" in leave_type or "조퇴" in leave_type: color = "#1E90FF" # 파랑
+                elif "훈련" in leave_type: color = "#228B22" # 초록
+                
+                events.append({
+                    "title": f"{row['이름']} ({leave_type})",
+                    "start": date_only,
+                    "color": color
+                })
+            except:
+                continue # 날짜 형식이 이상하면 건너뜀
+
+    # 캘린더 옵션
+    calendar_options = {
+        "headerToolbar": {
+            "left": "today prev,next",
+            "center": "title",
+            "right": "dayGridMonth,listMonth"
+        },
+        "initialView": "dayGridMonth",
+    }
+    
+    # 달력 그리기
+    calendar(events=events, options=calendar_options)
+
+
+# 4. 근태신청
+with tab4:
     st.write("### 📅 연차/근태 신청")
     
     if st.button("📝 근태 신청서 작성 (터치)", on_click=toggle_attend, use_container_width=True): pass
@@ -191,7 +240,7 @@ with tab3:
                 with c1: name = st.text_input("이름 (필수)")
                 with c2: pw_att = st.text_input("비밀번호 (확인용)", type="password")
                 
-                type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근", "훈련"])
+                type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근", "예비군/훈련"])
                 
                 c3, c4 = st.columns(2)
                 with c3: date_val = st.date_input("날짜")
@@ -210,14 +259,11 @@ with tab3:
     
     st.divider()
     st.write("#### 🔒 내 신청 결과 조회")
-    st.caption("이름과 비밀번호를 입력해야 결과를 볼 수 있습니다.")
     
     with st.form("my_attend_search"):
         col_search1, col_search2 = st.columns([1,1])
-        with col_search1:
-            search_name = st.text_input("이름")
-        with col_search2:
-            search_pw = st.text_input("비밀번호", type="password")
+        with col_search1: search_name = st.text_input("이름")
+        with col_search2: search_pw = st.text_input("비밀번호", type="password")
             
         if st.form_submit_button("내역 조회", use_container_width=True):
             df_a = load_data("근태신청")
@@ -226,14 +272,9 @@ with tab3:
             elif not search_name or not search_pw:
                 st.warning("이름과 비밀번호를 입력해주세요.")
             else:
-                # 필터링 로직
-                my_result = df_a[
-                    (df_a['이름'] == search_name) & 
-                    (df_a['비밀번호'].astype(str) == str(search_pw))
-                ]
-                
+                my_result = df_a[(df_a['이름'] == search_name) & (df_a['비밀번호'].astype(str) == str(search_pw))]
                 if my_result.empty:
-                    st.error("일치하는 내역이 없습니다. (이름/비번 확인)")
+                    st.error("일치하는 내역이 없습니다.")
                 else:
                     st.success(f"총 {len(my_result)}건의 신청 내역이 있습니다.")
                     for idx, row in my_result.iloc[::-1].iterrows():
@@ -241,14 +282,13 @@ with tab3:
                         color = "orange"
                         if status == "승인": color = "green"
                         elif status == "반려": color = "red"
-                        
                         with st.container(border=True):
                             st.markdown(f"**{row['구분']}** - :{color}[**{status}**]")
                             st.text(f"일시: {row['날짜및시간']}")
                             st.caption(f"사유: {row['사유']} (신청일: {row['신청일']})")
 
-# 4. 관리자
-with tab4:
+# 5. 관리자
+with tab5:
     st.write("🔒 관리자 전용")
     pw = st.text_input("비밀번호", type="password")
     
@@ -314,7 +354,7 @@ with tab4:
                     st.info(f"신청자: {row_a['이름']} | 구분: {row_a['구분']}")
                     st.write(f"일시: {row_a['날짜및시간']}")
                     st.write(f"사유: {row_a['사유']}")
-                    st.caption(f"비밀번호: {row_a.get('비밀번호', '없음')}") # 관리자는 비번 볼 수 있음
+                    st.caption(f"비밀번호: {row_a.get('비밀번호', '없음')}")
                     
                     c_app, c_rej, c_del = st.columns(3)
                     with c_app:
