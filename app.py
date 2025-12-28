@@ -3,12 +3,13 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
+import uuid # [추가] 고유 ID 생성을 위해 사용
 from streamlit_calendar import calendar
 
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# --- [스타일] CSS ---
+# --- [스타일] CSS (모바일 강제 렌더링 수정 포함) ---
 st.markdown("""
 <style>
     div[data-testid="stMarkdownContainer"] p {
@@ -24,12 +25,20 @@ st.markdown("""
     .fc-toolbar-title {
         font-size: 1.2em !important;
     }
+    
+    /* [핵심 수정] 모바일에서 아이프레임(달력) 높이 강제 고정 */
     @media (max-width: 768px) {
         h1 { font-size: 2.0rem !important; word-break: keep-all !important; }
         div.stButton > button {
             width: 100%;
             height: 3.5rem;
             font-size: 18px;
+        }
+        /* Streamlit Custom Component의 iframe 강제 확장 */
+        iframe[title="streamlit_calendar.calendar"] {
+            min-height: 600px !important;
+            height: 600px !important;
+            display: block !important;
         }
     }
 </style>
@@ -93,7 +102,8 @@ st.title("🏢 제이유 사내광장")
 
 if 'show_sugg_form' not in st.session_state: st.session_state['show_sugg_form'] = False
 if 'show_attend_form' not in st.session_state: st.session_state['show_attend_form'] = False
-if 'view_mode' not in st.session_state: st.session_state['view_mode'] = "달력" # 보기 모드 상태 저장
+# [추가] 모바일 렌더링 이슈 해결을 위한 초기 키 설정
+if 'calendar_key' not in st.session_state: st.session_state['calendar_key'] = str(uuid.uuid4())
 
 def toggle_sugg(): st.session_state['show_sugg_form'] = not st.session_state['show_sugg_form']
 def toggle_attend(): st.session_state['show_attend_form'] = not st.session_state['show_attend_form']
@@ -175,19 +185,19 @@ with tab2:
                                 st.markdown(r['내용'])
                                 st.caption(r['작성일'])
 
-# 3. 근무표 (수정됨: 초기 로딩 문제 해결)
+# 3. 근무표 (모바일 CSS 적용됨)
 with tab3:
     st.write("### 📆 승인된 근무/휴가 현황")
     st.caption("관리자가 승인한 일정은 달력에 표시됩니다.")
     
-    # 상단 컨트롤바
     c_btn, c_view = st.columns([0.6, 0.4])
     with c_btn:
         if st.button("🔄 근무표 새로고침", key="cal_refresh", use_container_width=True):
             st.cache_data.clear()
+            # 새로고침 시 키값을 바꿔서 강제 리렌더링 유도
+            st.session_state['calendar_key'] = str(uuid.uuid4())
             st.rerun()
     with c_view:
-        # Session State와 연동하여 상태 유지
         view_type = st.radio(
             "보기", ["달력", "목록"], 
             horizontal=True, 
@@ -198,7 +208,6 @@ with tab3:
     df_cal = load_data("근태신청")
     events = []
     
-    # 데이터 처리 및 이벤트 생성
     if not df_cal.empty:
         try:
             df_cal['상태'] = df_cal['상태'].astype(str).str.strip()
@@ -226,9 +235,7 @@ with tab3:
         except Exception:
             pass
 
-    # 화면 렌더링
     if view_type == "달력":
-        # [핵심 수정 1] 달력 옵션에서 height를 "px" 문자열로 지정
         calendar_options = {
             "headerToolbar": {
                 "left": "today prev,next",
@@ -237,18 +244,20 @@ with tab3:
             },
             "initialView": "dayGridMonth",
             "locale": "ko",
-            "height": "750px",  # 문자열로 "px" 명시 (중요)
-            "contentHeight": "auto"
+            "height": "750px",  # 데스크탑용 높이 (모바일은 CSS로 덮어씌워짐)
+            "contentHeight": "auto",
+            "dayMaxEvents": 3   # 하루에 3개까지만 표시 (더보기 링크 생성)
         }
         
-        # [핵심 수정 2] key를 'events' 길이에 따라 동적으로 변경
-        # 데이터가 로드되거나 변경되면 key가 바뀌면서 컴포넌트를 강제 재생성(Re-mount)하여 화면에 그립니다.
-        dynamic_key = f"calendar_widget_{len(events)}"
+        # [핵심] 키값에 랜덤 UUID를 포함시켜 초기 로딩 실패 시 
+        # 사용자가 새로고침 등을 할 때 무조건 컴포넌트를 다시 그리게 함
+        # + len(events)를 통해 데이터 변경시에도 갱신
+        dynamic_key = f"cal_{st.session_state['calendar_key']}_{len(events)}"
         
         calendar(
             events=events,
             options=calendar_options,
-            key=dynamic_key, 
+            key=dynamic_key,
             custom_css="""
             .fc {
                 background-color: white;
@@ -259,7 +268,6 @@ with tab3:
             """
         )
     else:
-        # 목록 보기
         if not df_cal.empty and 'approved_df' in locals() and not approved_df.empty:
             approved_df = approved_df.sort_values(by='날짜및시간', ascending=False)
             for idx, row in approved_df.iterrows():
