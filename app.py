@@ -3,7 +3,7 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
-from streamlit_calendar import calendar  # [추가] 캘린더 라이브러리
+from streamlit_calendar import calendar  # [필수] requirements.txt에 streamlit-calendar 추가 필요
 
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
@@ -16,9 +16,11 @@ st.markdown("""
         line-height: 1.6 !important;
         word-break: keep-all !important;
     }
+    /* 캘린더 이벤트 폰트 스타일 */
     .fc-event-title {
         font-weight: bold !important;
-        font-size: 0.9em !important;
+        font-size: 0.85em !important;
+        color: white !important;
     }
     @media (max-width: 768px) {
         h1 { font-size: 2.0rem !important; word-break: keep-all !important; }
@@ -172,46 +174,52 @@ with tab2:
                                 st.markdown(r['내용'])
                                 st.caption(r['작성일'])
 
-# 3. 근무표 (캘린더 라이브러리 적용)
+# 3. 근무표 (수정됨: 항상 보이는 달력)
 with tab3:
     st.write("### 📆 승인된 근무/휴가 현황")
     st.caption("관리자가 승인한 일정은 달력에 표시됩니다.")
     
+    # 새로고침 버튼
     if st.button("🔄 근무표 새로고침", key="cal_refresh", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
     df_cal = load_data("근태신청")
     
-    # 캘린더 이벤트 리스트 초기화
+    # 이벤트 리스트 초기화 (데이터 없어도 빈 리스트로 시작)
     events = []
 
-    # 데이터가 있고, 승인된 건만 필터링하여 이벤트 생성
+    # 데이터가 있다면 이벤트 추가
     if not df_cal.empty:
+        # '승인' 상태만 필터링
         approved_df = df_cal[df_cal['상태'] == '승인']
         
         for index, row in approved_df.iterrows():
-            # 색상 설정
-            leave_type = row['구분']
-            if "연차" in leave_type: color = "#FF6C6C"  # 빨강
-            elif "반차" in leave_type: color = "#FFB36C" # 주황
-            elif "훈련" in leave_type: color = "#4CAF50" # 초록
-            else: color = "#3788D8" # 파랑 (기본)
+            try:
+                leave_type = str(row['구분'])
+                # 색상 지정
+                if "연차" in leave_type: color = "#FF4B4B"  # 빨강
+                elif "반차" in leave_type: color = "#FFA500" # 주황
+                elif "훈련" in leave_type: color = "#2E8B57" # 짙은 초록
+                else: color = "#3182CE" # 파랑
 
-            # 날짜 파싱 (예: "2025-01-01 (14:00)" -> "2025-01-01")
-            raw_date = str(row['날짜및시간'])
-            clean_date = raw_date.split(' ')[0] # 공백 기준 앞부분만 사용
+                # 날짜 처리 (YYYY-MM-DD (시간) 형식에서 앞부분만 추출)
+                raw_date = str(row['날짜및시간'])
+                if raw_date and raw_date != "nan":
+                    clean_date = raw_date.split(' ')[0] 
+                    
+                    events.append({
+                        "title": f"[{row['이름']}] {leave_type}",
+                        "start": clean_date,
+                        "end": clean_date,
+                        "backgroundColor": color,
+                        "borderColor": color,
+                        "allDay": True
+                    })
+            except:
+                continue # 날짜 형식이 이상해도 무시하고 계속 진행
 
-            events.append({
-                "title": f"[{row['이름']}] {leave_type}",
-                "start": clean_date,
-                "end": clean_date,
-                "backgroundColor": color,
-                "borderColor": color,
-                "allDay": True
-            })
-
-    # 달력 옵션
+    # 달력 옵션 설정 (높이 강제 지정)
     calendar_options = {
         "headerToolbar": {
             "left": "today prev,next",
@@ -220,11 +228,38 @@ with tab3:
         },
         "initialView": "dayGridMonth",
         "selectable": True,
-        "locale": "ko"  # 한글 설정
+        "locale": "ko",
+        "height": "750px",       # [중요] 높이를 750px로 고정 (안 보이던 문제 해결)
+        "contentHeight": "auto"
     }
 
-    # 달력 그리기 (데이터 없어도 달력은 항상 표시됨)
-    calendar(events=events, options=calendar_options)
+    # [중요] calendar 함수는 if문 밖에서 무조건 실행 (데이터 없으면 빈 달력 그림)
+    # custom_css로 배경을 흰색으로 강제 (다크모드에서도 보이게 함)
+    calendar(
+        events=events,
+        options=calendar_options,
+        key="office_calendar",
+        custom_css="""
+        .fc {
+            background-color: #FFFFFF; 
+            padding: 15px;
+            border-radius: 8px;
+            color: #333333;
+        }
+        .fc-toolbar-title {
+            color: #333333 !important;
+        }
+        .fc-button {
+            background-color: #f0f2f6 !important;
+            color: #31333F !important;
+            border: none !important;
+        }
+        .fc-button-active {
+            background-color: #ff4b4b !important;
+            color: white !important;
+        }
+        """
+    )
 
 
 # 4. 근태신청
