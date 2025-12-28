@@ -3,12 +3,12 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
-from streamlit_calendar import calendar  # [필수] requirements.txt에 streamlit-calendar 추가 필요
+from streamlit_calendar import calendar  # [필수] requirements.txt에 streamlit-calendar 확인
 
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# --- [스타일] CSS ---
+# --- [스타일] CSS (달력 강제 표시 및 폰트 설정) ---
 st.markdown("""
 <style>
     div[data-testid="stMarkdownContainer"] p {
@@ -16,15 +16,24 @@ st.markdown("""
         line-height: 1.6 !important;
         word-break: keep-all !important;
     }
-    /* 캘린더 이벤트 폰트 스타일 */
+    /* 캘린더 이벤트 폰트 */
     .fc-event-title {
         font-weight: bold !important;
         font-size: 0.85em !important;
         color: white !important;
     }
+    /* 캘린더 툴바 버튼 스타일 */
+    .fc-button {
+        background-color: #f0f2f6 !important;
+        color: #31333F !important;
+        border: none !important;
+    }
+    .fc-button-active {
+        background-color: #ff4b4b !important;
+        color: white !important;
+    }
     @media (max-width: 768px) {
         h1 { font-size: 2.0rem !important; word-break: keep-all !important; }
-        h3 { font-size: 1.3rem !important; word-break: keep-all !important; }
         div.stButton > button {
             width: 100%;
             height: 3.5rem;
@@ -53,7 +62,7 @@ def load_data(sheet_name):
     except Exception as e:
         return pd.DataFrame()
 
-# --- [함수] 저장 로직 ---
+# --- [함수] 저장/수정/삭제 로직 ---
 def save_notice(date, title, content, is_important):
     sheet = get_worksheet("공지사항")
     sheet.append_row([date, title, content, "TRUE" if is_important else "FALSE"])
@@ -69,7 +78,6 @@ def save_attendance(date, name, type_val, target_time, reason, password):
     sheet.append_row([date, name, type_val, target_time, reason, "대기중", str(password)])
     st.cache_data.clear()
 
-# --- [함수] 삭제/수정/상태변경 ---
 def delete_row(sheet_name, row_idx):
     sheet = get_worksheet(sheet_name)
     sheet.delete_rows(row_idx + 2)
@@ -174,52 +182,49 @@ with tab2:
                                 st.markdown(r['내용'])
                                 st.caption(r['작성일'])
 
-# 3. 근무표 (수정됨: 항상 보이는 달력)
+# 3. 근무표 (수정됨: 데이터 에러가 있어도 달력은 무조건 표시)
 with tab3:
     st.write("### 📆 승인된 근무/휴가 현황")
-    st.caption("관리자가 승인한 일정은 달력에 표시됩니다.")
+    st.caption("관리자가 승인한 일정만 달력에 표시됩니다.")
     
-    # 새로고침 버튼
     if st.button("🔄 근무표 새로고침", key="cal_refresh", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
     df_cal = load_data("근태신청")
-    
-    # 이벤트 리스트 초기화 (데이터 없어도 빈 리스트로 시작)
     events = []
 
-    # 데이터가 있다면 이벤트 추가
+    # 데이터 처리 (에러가 나도 달력은 그리도록 try-except 처리)
     if not df_cal.empty:
-        # '승인' 상태만 필터링
-        approved_df = df_cal[df_cal['상태'] == '승인']
-        
-        for index, row in approved_df.iterrows():
-            try:
-                leave_type = str(row['구분'])
-                # 색상 지정
-                if "연차" in leave_type: color = "#FF4B4B"  # 빨강
+        try:
+            # 승인된 건만 필터링
+            approved_df = df_cal[df_cal['상태'] == '승인']
+            
+            for index, row in approved_df.iterrows():
+                # 색상 설정
+                leave_type = str(row.get('구분', ''))
+                if "연차" in leave_type: color = "#FF4B4B"   # 빨강
                 elif "반차" in leave_type: color = "#FFA500" # 주황
-                elif "훈련" in leave_type: color = "#2E8B57" # 짙은 초록
+                elif "훈련" in leave_type: color = "#2E8B57" # 초록
                 else: color = "#3182CE" # 파랑
 
-                # 날짜 처리 (YYYY-MM-DD (시간) 형식에서 앞부분만 추출)
-                raw_date = str(row['날짜및시간'])
-                if raw_date and raw_date != "nan":
-                    clean_date = raw_date.split(' ')[0] 
+                # 날짜 파싱 (안전장치 추가)
+                raw_date = str(row.get('날짜및시간', ''))
+                if len(raw_date) >= 10:  # 최소 YYYY-MM-DD 길이 확인
+                    clean_date = raw_date.split(' ')[0] # 공백 기준 앞부분만 사용
                     
                     events.append({
-                        "title": f"[{row['이름']}] {leave_type}",
+                        "title": f"[{row.get('이름','')}] {leave_type}",
                         "start": clean_date,
                         "end": clean_date,
                         "backgroundColor": color,
                         "borderColor": color,
                         "allDay": True
                     })
-            except:
-                continue # 날짜 형식이 이상해도 무시하고 계속 진행
+        except Exception as e:
+            st.error(f"데이터 변환 중 오류 발생: {e}")
 
-    # 달력 옵션 설정 (높이 강제 지정)
+    # 달력 옵션 설정
     calendar_options = {
         "headerToolbar": {
             "left": "today prev,next",
@@ -229,12 +234,11 @@ with tab3:
         "initialView": "dayGridMonth",
         "selectable": True,
         "locale": "ko",
-        "height": "750px",       # [중요] 높이를 750px로 고정 (안 보이던 문제 해결)
+        "height": "750px",      # 높이 강제 고정
         "contentHeight": "auto"
     }
 
-    # [중요] calendar 함수는 if문 밖에서 무조건 실행 (데이터 없으면 빈 달력 그림)
-    # custom_css로 배경을 흰색으로 강제 (다크모드에서도 보이게 함)
+    # [핵심] 달력 그리기 (배경색 흰색 강제 적용)
     calendar(
         events=events,
         options=calendar_options,
@@ -242,21 +246,12 @@ with tab3:
         custom_css="""
         .fc {
             background-color: #FFFFFF; 
-            padding: 15px;
-            border-radius: 8px;
+            padding: 15px; 
+            border-radius: 10px;
             color: #333333;
         }
         .fc-toolbar-title {
             color: #333333 !important;
-        }
-        .fc-button {
-            background-color: #f0f2f6 !important;
-            color: #31333F !important;
-            border: none !important;
-        }
-        .fc-button-active {
-            background-color: #ff4b4b !important;
-            color: white !important;
         }
         """
     )
@@ -323,13 +318,13 @@ with tab4:
                             st.text(f"일시: {row['날짜및시간']}")
                             st.caption(f"사유: {row['사유']} (신청일: {row['신청일']})")
 
-# 5. 관리자
+# 5. 관리자 (수정됨: 승인/반려 시 목록에서 사라지게 함)
 with tab5:
     st.write("🔒 관리자 전용")
     pw = st.text_input("비밀번호", type="password")
     
     if str(pw).strip() == str(st.secrets["admin_password"]).strip():
-        st.success("관리자 접속")
+        st.success("관리자 접속 성공")
         mode = st.radio("작업", ["📝 공지쓰기", "🔧 공지관리", "🔧 건의함관리", "✅ 근태승인/관리"])
         
         if mode == "📝 공지쓰기":
@@ -371,40 +366,47 @@ with tab5:
                     st.rerun()
 
         elif mode == "✅ 근태승인/관리":
-            st.write("### 근태 신청 관리")
+            st.write("### ⚡ 근태 신청 처리")
             df_a = load_data("근태신청")
+            
             if df_a.empty:
                 st.info("데이터가 없습니다.")
             else:
-                pending = df_a[df_a['상태'] == '대기중']
-                if not pending.empty:
-                    st.warning(f"⚡ 승인 대기 중인 건이 {len(pending)}개 있습니다!")
+                # [핵심] '대기중'인 것만 목록에 보여줍니다. 
+                # 승인/반려된 건은 DB에는 남지만 관리자 목록에서는 안 보이게 됩니다.
+                pending_df = df_a[df_a['상태'] == '대기중']
                 
-                opts = [f"[{i}] {r['이름']} ({r['구분']}) - {r.get('상태','미정')}" for i, r in df_a.iterrows()]
-                sel_a = st.selectbox("처리할 내역 선택", opts)
-                
-                if sel_a:
-                    idx_a = int(sel_a.split(']')[0].replace('[',''))
-                    row_a = df_a.loc[idx_a]
+                if pending_df.empty:
+                    st.info("현재 대기 중인 문서가 없습니다.")
+                else:
+                    st.warning(f"처리가 필요한 건이 {len(pending_df)}개 있습니다.")
                     
-                    st.info(f"신청자: {row_a['이름']} | 구분: {row_a['구분']}")
-                    st.write(f"일시: {row_a['날짜및시간']}")
-                    st.write(f"사유: {row_a['사유']}")
-                    st.caption(f"비밀번호: {row_a.get('비밀번호', '없음')}")
+                    opts = [f"[{i}] {r['이름']} ({r['구분']})" for i, r in pending_df.iterrows()]
+                    sel_a = st.selectbox("처리할 내역 선택", opts)
                     
-                    c_app, c_rej, c_del = st.columns(3)
-                    with c_app:
-                        if st.button("✅ 승인", use_container_width=True):
-                            update_attendance_status(idx_a, "승인")
-                            st.rerun()
-                    with c_rej:
-                        if st.button("⛔ 반려", use_container_width=True):
-                            update_attendance_status(idx_a, "반려")
-                            st.rerun()
-                    with c_del:
-                        if st.button("🗑️ 삭제", type="primary", use_container_width=True):
-                            delete_row("근태신청", idx_a)
-                            st.rerun()
+                    if sel_a:
+                        idx_a = int(sel_a.split(']')[0].replace('[',''))
+                        row_a = df_a.loc[idx_a]
+                        
+                        with st.container(border=True):
+                            st.info(f"👤 **{row_a['이름']}**님의 신청서")
+                            st.write(f"일시: {row_a['날짜및시간']}")
+                            st.write(f"사유: {row_a['사유']}")
+                            st.caption(f"비밀번호: {row_a.get('비밀번호', '없음')}")
+                        
+                        c_app, c_rej, c_del = st.columns(3)
+                        with c_app:
+                            if st.button("✅ 승인 (달력게시)", use_container_width=True):
+                                update_attendance_status(idx_a, "승인")
+                                st.rerun()
+                        with c_rej:
+                            if st.button("⛔ 반려", use_container_width=True):
+                                update_attendance_status(idx_a, "반려")
+                                st.rerun()
+                        with c_del:
+                            if st.button("🗑️ 영구 삭제", type="primary", use_container_width=True):
+                                delete_row("근태신청", idx_a)
+                                st.rerun()
 
     elif pw:
         st.error("비밀번호 불일치")
