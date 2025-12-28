@@ -3,6 +3,7 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
+from streamlit_calendar import calendar  # [추가] 캘린더 라이브러리
 
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
@@ -14,6 +15,10 @@ st.markdown("""
         font-size: 18px !important;
         line-height: 1.6 !important;
         word-break: keep-all !important;
+    }
+    .fc-event-title {
+        font-weight: bold !important;
+        font-size: 0.9em !important;
     }
     @media (max-width: 768px) {
         h1 { font-size: 2.0rem !important; word-break: keep-all !important; }
@@ -90,7 +95,7 @@ if 'show_attend_form' not in st.session_state: st.session_state['show_attend_for
 def toggle_sugg(): st.session_state['show_sugg_form'] = not st.session_state['show_sugg_form']
 def toggle_attend(): st.session_state['show_attend_form'] = not st.session_state['show_attend_form']
 
-# 탭 구성 (근무표 탭 포함)
+# 탭 구성
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 공지", "🗣️ 건의", "📆 근무표", "📅 근태신청", "⚙️ 관리자"])
 
 # 1. 공지사항
@@ -167,58 +172,60 @@ with tab2:
                                 st.markdown(r['내용'])
                                 st.caption(r['작성일'])
 
-# 3. 근무표 (캘린더 라이브러리 제거 -> 게시판 형태)
+# 3. 근무표 (캘린더 라이브러리 적용)
 with tab3:
     st.write("### 📆 승인된 근무/휴가 현황")
-    st.caption("관리자가 승인한 일정만 표시됩니다.")
+    st.caption("관리자가 승인한 일정은 달력에 표시됩니다.")
     
-    if st.button("🔄 근무표 새로고침", use_container_width=True):
+    if st.button("🔄 근무표 새로고침", key="cal_refresh", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
 
     df_cal = load_data("근태신청")
     
-    if df_cal.empty:
-        st.info("데이터가 없습니다.")
-    else:
-        # 상태가 '승인'인 것만 필터링
+    # 캘린더 이벤트 리스트 초기화
+    events = []
+
+    # 데이터가 있고, 승인된 건만 필터링하여 이벤트 생성
+    if not df_cal.empty:
         approved_df = df_cal[df_cal['상태'] == '승인']
         
-        if approved_df.empty:
-            st.info("아직 승인된 휴가/근무 내역이 없습니다.")
-        else:
-            # 날짜순 정렬 (오름차순: 다가오는 날짜가 위로)
-            # 날짜 정렬을 위해 문자열 정렬 사용 (YYYY-MM-DD 형식이므로 가능)
-            approved_df = approved_df.sort_values(by='날짜및시간', ascending=True)
+        for index, row in approved_df.iterrows():
+            # 색상 설정
+            leave_type = row['구분']
+            if "연차" in leave_type: color = "#FF6C6C"  # 빨강
+            elif "반차" in leave_type: color = "#FFB36C" # 주황
+            elif "훈련" in leave_type: color = "#4CAF50" # 초록
+            else: color = "#3788D8" # 파랑 (기본)
 
-            for index, row in approved_df.iterrows():
-                # 스타일 설정 (연차는 빨강, 그 외는 파랑 등)
-                leave_type = row['구분']
-                icon = "🟦" # 기본 파랑
-                
-                if "연차" in leave_type: 
-                    icon = "🟥" # 빨강
-                    text_color = "red"
-                elif "반차" in leave_type: 
-                    icon = "🟧" # 주황
-                    text_color = "orange"
-                elif "훈련" in leave_type: 
-                    icon = "🟩" # 초록
-                    text_color = "green"
-                else:
-                    text_color = "blue"
+            # 날짜 파싱 (예: "2025-01-01 (14:00)" -> "2025-01-01")
+            raw_date = str(row['날짜및시간'])
+            clean_date = raw_date.split(' ')[0] # 공백 기준 앞부분만 사용
 
-                # 카드 UI로 표시
-                with st.container(border=True):
-                    col_left, col_right = st.columns([0.7, 0.3])
-                    
-                    with col_left:
-                        st.markdown(f"**{icon} {row['이름']} - {leave_type}**")
-                        st.caption(f"일시: {row['날짜및시간']}")
-                    
-                    with col_right:
-                        # 날짜가 잘 보이도록 강조
-                        st.markdown(f":{text_color}[**승인됨**]")
+            events.append({
+                "title": f"[{row['이름']}] {leave_type}",
+                "start": clean_date,
+                "end": clean_date,
+                "backgroundColor": color,
+                "borderColor": color,
+                "allDay": True
+            })
+
+    # 달력 옵션
+    calendar_options = {
+        "headerToolbar": {
+            "left": "today prev,next",
+            "center": "title",
+            "right": "dayGridMonth,listWeek"
+        },
+        "initialView": "dayGridMonth",
+        "selectable": True,
+        "locale": "ko"  # 한글 설정
+    }
+
+    # 달력 그리기 (데이터 없어도 달력은 항상 표시됨)
+    calendar(events=events, options=calendar_options)
+
 
 # 4. 근태신청
 with tab4:
