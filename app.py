@@ -13,7 +13,7 @@ import os
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# --- [설정] 관리자 및 회사 정보 (이름만 있는 리스트) ---
+# --- [설정] 관리자 및 회사 정보 ---
 FOREMEN = [
     "JK 조장", "JX 메인 조장", "JX 어퍼 조장",
     "MX5 조장", "피더 조장"
@@ -33,7 +33,7 @@ COMPANIES = {
 # 사용자 비밀번호 저장 파일
 USER_DB_FILE = 'user_db.json'
 
-# --- [스타일] CSS (메인 페이지용) ---
+# --- [스타일] CSS ---
 st.markdown("""
 <style>
     div[data-testid="stMarkdownContainer"] p { font-size: 18px !important; line-height: 1.6; }
@@ -65,14 +65,14 @@ def get_worksheet(sheet_name):
     return client.open("사내공지사항DB").worksheet(sheet_name)
 
 # --- [데이터 로드] ---
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300) # 캐시 시간 단축
 def load_data(sheet_name, company_name):
     try:
         sheet = get_worksheet(sheet_name)
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
         
-        # 데이터가 비어있거나 컬럼이 없을 경우 강제로 컬럼 생성 (에러 방지)
+        # 빈 데이터프레임 처리 및 필수 컬럼 보장
         if df.empty or '상태' not in df.columns:
             if sheet_name == "근태신청":
                 df = pd.DataFrame(columns=['소속', '작성일', '이름', '구분', '날짜및시간', '사유', '상태', '비밀번호', '승인자'])
@@ -86,8 +86,13 @@ def load_data(sheet_name, company_name):
         # 문자열 변환
         df = df.astype(str)
         
+        # [수정] 소속 필터링 강화 (공백 제거 후 비교) -> 장안 공지 미노출 해결
         if '소속' in df.columns:
-            df = df[df['소속'] == company_name]
+            # 시트의 소속 데이터 앞뒤 공백 제거
+            df['소속'] = df['소속'].str.strip()
+            # 필터링
+            df = df[df['소속'] == company_name.strip()]
+            
         return df
     except Exception as e:
         return pd.DataFrame()
@@ -95,7 +100,9 @@ def load_data(sheet_name, company_name):
 # --- [함수] 저장 로직 ---
 def save_notice(company, title, content, is_important):
     sheet = get_worksheet("공지사항")
-    sheet.append_row([company, get_korea_time(), title, content, "TRUE" if is_important else "FALSE"])
+    # [수정] 중요 여부를 대문자 TRUE/FALSE 문자열로 확실히 변환
+    imp_str = "TRUE" if is_important else "FALSE"
+    sheet.append_row([company, get_korea_time(), title, content, imp_str])
     st.cache_data.clear()
 
 def save_suggestion(company, title, content, author, is_private, password):
@@ -126,8 +133,10 @@ def update_attendance_status(sheet_name, row_idx, new_status):
 if 'company_name' not in st.session_state:
     st.title("🏢 제이유 그룹 인트라넷")
     st.write("접속하려는 회사의 코드를 입력해주세요.")
+    
     with st.form("login_form"):
         pw_input = st.text_input("회사 접속 코드", type="password")
+        # 엔터키 로그인 지원
         if st.form_submit_button("로그인"):
             if pw_input in COMPANIES:
                 st.session_state['company_name'] = COMPANIES[pw_input]
@@ -164,6 +173,7 @@ with tab1:
     df = load_data("공지사항", COMPANY)
     if df.empty: st.info("공지사항이 없습니다.")
     else:
+        # 최신글이 위로 오게 역순 정렬
         for idx, row in df.iloc[::-1].iterrows():
             is_imp = str(row.get("중요", "FALSE")).upper() == "TRUE"
             with st.container(border=True):
@@ -286,7 +296,6 @@ with tab3:
                 if month_stats:
                     st.dataframe(pd.DataFrame(list(month_stats.items()), columns=["월", "사용일수"]).sort_values("월"), hide_index=True)
     else:
-        # [수정] 목록 보기 개선: 공휴일 제외 및 컬럼 숨김
         filtered_events = [e for e in events if e.get("extendedProps", {}).get("type") != "holiday"]
         if filtered_events:
             list_df = pd.DataFrame(filtered_events)
@@ -314,7 +323,6 @@ with tab4:
     if st.session_state['show_attend_form']:
         with st.container(border=True):
             with st.form("att_form"):
-                # 기본 정보
                 c1, c2 = st.columns(2)
                 name = c1.text_input("이름")
                 pw = c2.text_input("비밀번호(본인확인용)", type="password")
@@ -328,8 +336,8 @@ with tab4:
                 final_date_str = ""
                 
                 if date_mode == "하루/반차/외출 (단일)":
-                    st.write("**📆 일시 및 시간 선택**")
-                    # [수정] 날짜, 시작시간, 종료시간 분리 입력
+                    st.write("**📆 일시 및 시간 선택 (단일)**")
+                    # 단일 선택: 날짜 1개 + 시작시간 + 종료시간
                     dc1, dc2, dc3 = st.columns(3)
                     d_sel = dc1.date_input("날짜 선택", value=datetime.now())
                     t_start = dc2.time_input("시작 시간", value=time(9,0))
@@ -338,7 +346,8 @@ with tab4:
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
                 
                 else:
-                    st.write("**📆 기간 선택**")
+                    st.write("**📆 기간 선택 (연차/휴가)**")
+                    # [수정] 기간 선택: 시작 날짜 + 종료 날짜 (시간 제외)
                     dc1, dc2 = st.columns(2)
                     d_start = dc1.date_input("시작일", value=datetime.now())
                     d_end = dc2.date_input("종료일", value=datetime.now())
@@ -395,19 +404,26 @@ with tab5:
                         else:
                             st.error("비밀번호가 일치하지 않습니다.")
             else:
-                input_pw = st.text_input("비밀번호 입력", type="password")
-                if st.button("로그인"):
-                    if input_pw == user_db[selected_name]:
-                        st.session_state['logged_in_manager'] = selected_name
+                # 관리자 로그인 폼 (엔터키 지원)
+                with st.form("manager_login_form"):
+                    input_pw = st.text_input("비밀번호 입력", type="password")
+                    if st.form_submit_button("로그인"):
+                        if input_pw == user_db[selected_name]:
+                            st.session_state['logged_in_manager'] = selected_name
+                            st.rerun()
+                        else:
+                            st.error("비밀번호가 틀렸습니다.")
+        
+        with st.expander("시스템 최고 관리자"):
+            # 마스터 로그인 폼 (엔터키 지원)
+            with st.form("master_login_form"):
+                master_pw = st.text_input("Master PW", type="password")
+                if st.form_submit_button("Master Login"):
+                    if master_pw == st.secrets["admin_password"]:
+                        st.session_state['logged_in_manager'] = "MASTER"
                         st.rerun()
                     else:
                         st.error("비밀번호가 틀렸습니다.")
-        with st.expander("시스템 최고 관리자"):
-            master_pw = st.text_input("Master PW", type="password")
-            if st.button("Master Login"):
-                if master_pw == st.secrets["admin_password"]:
-                    st.session_state['logged_in_manager'] = "MASTER"
-                    st.rerun()
     else:
         manager_id = st.session_state['logged_in_manager']
         manager_name = manager_id
@@ -448,15 +464,11 @@ with tab5:
                 type_sel = st.selectbox("유형", ["공지사항", "일정"])
                 t = st.text_input("제목")
                 c = st.text_area("내용")
-                
-                # [수정] 중요 체크박스 복구
                 is_imp = st.checkbox("중요 공지 (상단 고정)", value=False)
-                
                 d_s = st.date_input("날짜(일정용)", value=datetime.now())
                 
                 if st.form_submit_button("등록"):
                     if type_sel == "공지사항":
-                        # [수정] 체크박스 값 전달
                         save_notice(COMPANY, t, c, is_imp)
                     else:
                         save_schedule(COMPANY, str(d_s), t, c, manager_name)
