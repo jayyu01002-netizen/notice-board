@@ -11,18 +11,20 @@ from streamlit_calendar import calendar
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# 1단계: 현장 반장 (PW: 0001 ~ 0005)
+# --- [설정] 관리자 계정 정보 (이미지 내용 반영) ---
+
+# 1단계: 현장 반장 (조장급) - PW: 9999 ~ 5555
 FOREMEN = {
-    "0001": "1라인 조장",
-    "0002": "2라인 조장",
-    "0003": "3라인 조장",
-    "0004": "4라인 조장",
-    "0005": "5라인 조장"
+    "9999": "JK 조장",
+    "8888": "JX 메인 조장",
+    "7777": "JX 어퍼 조장",
+    "6666": "MX5 조장",
+    "5555": "피더 조장"
 }
 
-# 2단계: 중간 관리자 (PW: 1111 ~ 4444)
+# 2단계: 중간 관리자 (반장급) - PW: 4444
 MIDDLE_MANAGERS = {
-    "1111": "반장"
+    "4444": "반장"
 }
 
 # --- [스타일] CSS ---
@@ -95,7 +97,6 @@ def save_suggestion(title, content, author, is_private, password):
 
 def save_attendance(name, type_val, target_time, reason, password, approver):
     sheet = get_worksheet("근태신청")
-    # 8번째 열에 '승인담당자(반장)' 저장
     sheet.append_row([get_korea_time(), name, type_val, target_time, reason, "대기중", str(password), approver])
     st.cache_data.clear()
 
@@ -204,7 +205,7 @@ with tab2:
                                 st.markdown(r['내용'])
                                 st.caption(r['작성일'])
 
-# 3. 근무표 (최종승인 된 건만 표시)
+# 3. 근무표 (목록 필터링 + 연차 합계 계산)
 with tab3:
     st.write("### 📆 승인된 근무/휴가 현황")
     st.caption("최종 승인된 일정만 달력에 표시됩니다.")
@@ -218,7 +219,7 @@ with tab3:
         view_type = st.radio("보기", ["달력", "목록"], horizontal=True, label_visibility="collapsed", key="view_mode")
 
     events = []
-    # [1] 공휴일
+    # [1] 공휴일 (extendedProps에 '공휴일' 명시)
     kr_holidays = holidays.KR(years=[datetime.now().year, datetime.now().year + 1])
     for date_obj, name in kr_holidays.items():
         events.append({
@@ -249,12 +250,11 @@ with tab3:
                 "color": "#8A2BE2", "allDay": True, "extendedProps": {"content": row.get('내용', '')}
             })
 
-    # [3] 근태 신청 (최종승인만 표시)
+    # [3] 근태 신청 (최종승인)
     df_cal = load_data("근태신청")
     if not df_cal.empty:
         try:
             df_cal['상태'] = df_cal['상태'].astype(str).str.strip()
-            # 과거 데이터('승인')도 호환되도록 포함
             approved_df = df_cal[df_cal['상태'].isin(['최종승인', '승인'])]
             for index, row in approved_df.iterrows():
                 leave_type = str(row.get('구분', '')).strip()
@@ -289,20 +289,47 @@ with tab3:
         dynamic_key = f"cal_{st.session_state['calendar_key']}_{len(events)}"
         cal_return = calendar(events=events, options=calendar_options, key=dynamic_key,
             custom_css=".fc { background-color: white; padding: 10px; border-radius: 8px; color: black; }")
+        
+        # [기능] 달력 클릭 시 연월차 합계 계산
         if cal_return.get("callback") == "eventClick":
             clicked_event = cal_return["eventClick"]["event"]
-            st.info(f"📌 **{clicked_event['title']}**")
-            st.write(f"날짜: {clicked_event['start'].split('T')[0]}")
-            st.write(f"내용: {clicked_event.get('extendedProps', {}).get('content', '내용 없음')}")
+            title = clicked_event["title"]
+            s_date = clicked_event["start"].split("T")[0]
+            content = clicked_event.get("extendedProps", {}).get("content", "내용 없음")
+            
+            st.info(f"📌 **{title}**")
+            st.write(f"날짜: {s_date}")
+            st.write(f"내용: {content}")
+            
+            # 이름 추출: [홍길동] 연차 -> 홍길동 추출 및 합계 계산
+            if "[" in title and "]" in title:
+                try:
+                    target_name = title.split("]")[0].replace("[", "").strip()
+                    if not df_cal.empty:
+                        # 해당 이름의 승인된 '연차/반차/월차'만 필터링하여 카운트
+                        user_leaves = df_cal[
+                            (df_cal['이름'] == target_name) & 
+                            (df_cal['상태'].isin(['최종승인', '승인'])) &
+                            (df_cal['구분'].str.contains('연차|반차|월차')) # 훈련/조퇴 등은 제외
+                        ]
+                        count = len(user_leaves)
+                        st.success(f"📊 **{target_name}**님의 누적 연/월차 사용: **{count}회**")
+                except:
+                    pass
     else:
-        st.write("#### 📝 전체 일정 목록")
+        # [기능] 목록 보기: 공휴일은 제외하고 회사일정 및 직원일정만 표시
+        st.write("#### 📝 전체 일정 목록 (공휴일 제외)")
         if events:
             sorted_events = sorted(events, key=lambda x: x['start'], reverse=True)
             for e in sorted_events:
-                if e.get("display") != "background":
+                # 공휴일인지 확인
+                content_text = e.get("extendedProps", {}).get("content", "")
+                
+                # 배경색용 이벤트 제외 및 공휴일 텍스트 제외
+                if e.get("display") != "background" and "공휴일" not in content_text:
                     with st.container(border=True):
                         st.write(f"**{e['start']}** {e['title']}")
-                        st.caption(e.get("extendedProps", {}).get("content", ""))
+                        st.caption(content_text)
         else: st.info("일정이 없습니다.")
 
 # 4. 근태신청 (반장 선택 기능)
@@ -320,9 +347,9 @@ with tab4:
                 
                 type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근", "예비군/훈련"])
                 
-                # [설정] 반장 목록 드롭다운
+                # [설정] 조장 목록 드롭다운
                 foreman_list = list(FOREMEN.values())
-                approver = st.selectbox("승인 요청 대상 (반장 선택)", foreman_list)
+                approver = st.selectbox("승인 요청 대상 (조장 선택)", foreman_list)
                 
                 st.caption("💡 며칠씩 쉴 경우 '기간/시간' 칸에 '1/1~1/3' 처럼 적어주세요.")
                 c3, c4 = st.columns(2)
@@ -373,19 +400,14 @@ with tab5:
     st.write("🔒 관리자 전용")
     pw = st.text_input("비밀번호", type="password")
     
-    # -------------------------------------------------------------
-    # [A] 최고 관리자 (Super Pass 가능)
-    # -------------------------------------------------------------
+    # [A] 최고 관리자 (Super Pass)
     if str(pw).strip() == str(st.secrets["admin_password"]).strip():
         st.success("🌟 최고 관리자 접속 (Super Pass 활성화)")
-        
         df_a = load_data("근태신청")
         if not df_a.empty:
             df_a['상태'] = df_a['상태'].astype(str).str.strip()
-            # [핵심] 슈퍼 패스: 대기중, 1차승인, 2차승인 모두 처리 가능
             pending_list = ['대기중', '1차승인', '2차승인']
             pending_count = len(df_a[df_a['상태'].isin(pending_list)])
-            
             if pending_count > 0:
                 st.metric(label="🔔 전체 결재 대기", value=f"{pending_count}건", delta="처리 필요")
             else: st.info("🔔 처리할 문서가 없습니다.")
@@ -400,7 +422,6 @@ with tab5:
                 if st.form_submit_button("등록"):
                     save_notice(t, c, i)
                     st.toast("등록됨")
-        
         elif mode == "📆 일정추가(회사)":
             st.info("회사 전체 일정을 등록합니다.")
             with st.form("new_sch"):
@@ -423,7 +444,6 @@ with tab5:
                     idx = int(del_sch.split(']')[0].replace('[',''))
                     delete_row("일정관리", idx)
                     st.rerun()
-
         elif mode == "🔧 공지관리":
             df = load_data("공지사항")
             if not df.empty:
@@ -443,7 +463,6 @@ with tab5:
                             if st.form_submit_button("삭제", type="primary"):
                                 delete_row("공지사항", idx)
                                 st.rerun()
-                                
         elif mode == "🔧 건의함관리":
             df_s = load_data("건의사항")
             if not df_s.empty:
@@ -452,17 +471,12 @@ with tab5:
                 if st.button("삭제하기", type="primary"):
                     delete_row("건의사항", int(sel_s.split(']')[0].replace('[','')))
                     st.rerun()
-
         elif mode == "✅ 통합 결재 관리":
             st.write("### 👑 슈퍼 패스 결재 (모든 단계 즉시 최종승인)")
-            st.caption("대기중/1차/2차 승인 건을 즉시 '최종 승인'하여 달력에 게시합니다.")
-            
             if df_a.empty: st.info("데이터가 없습니다.")
             else:
-                # [핵심] 슈퍼패스 필터: 대기, 1차, 2차 모두 포함
                 pending_list = ['대기중', '1차승인', '2차승인']
                 final_pending = df_a[df_a['상태'].isin(pending_list)]
-                
                 if final_pending.empty: st.info("✅ 현재 승인 처리할 문서가 없습니다.")
                 else:
                     opts = [f"[{i}] {r['이름']} ({r['구분']}) - 현재: {r['상태']}" for i, r in final_pending.iterrows()]
@@ -486,23 +500,17 @@ with tab5:
                                 st.warning("반려 처리됨.")
                                 st.rerun()
 
-    # -------------------------------------------------------------
-    # [B] 중간 관리자 (2차 승인) - PW: 1111~4444
-    # -------------------------------------------------------------
+    # [B] 중간 관리자 (2차 승인: 반장급)
     elif str(pw).strip() in MIDDLE_MANAGERS:
         manager_name = MIDDLE_MANAGERS[str(pw).strip()]
         st.success(f"👔 {manager_name}님 접속 (중간 관리자)")
-        
         df_a = load_data("근태신청")
         if not df_a.empty:
             df_a['상태'] = df_a['상태'].astype(str).str.strip()
-            # 중간 관리자는 '1차승인' 된 것만 처리 가능
             mid_pending = df_a[df_a['상태'] == '1차승인']
-            
             if len(mid_pending) > 0:
                 st.metric(label="🔔 2차 승인 대기", value=f"{len(mid_pending)}건", delta="결재 필요")
             else: st.info("🔔 처리할 대기 문서가 없습니다.")
-            
             if not mid_pending.empty:
                 opts = [f"[{i}] {r['이름']} ({r['구분']})" for i, r in mid_pending.iterrows()]
                 sel_a = st.selectbox("처리할 내역 선택", opts)
@@ -524,26 +532,18 @@ with tab5:
                             update_attendance_status(idx_a, "반려")
                             st.rerun()
 
-    # -------------------------------------------------------------
-    # [C] 반장 (1차 승인) - PW: 0001~0005
-    # -------------------------------------------------------------
+    # [C] 현장 조장 (1차 승인: 조장급)
     elif str(pw).strip() in FOREMEN:
         foreman_name = FOREMEN[str(pw).strip()]
-        st.success(f"⛑️ {foreman_name}님 접속 (반장)")
-        
+        st.success(f"⛑️ {foreman_name}님 접속 (현장 조장)")
         df_a = load_data("근태신청")
         if not df_a.empty:
             df_a['상태'] = df_a['상태'].astype(str).str.strip()
             df_a['승인담당자'] = df_a.get('승인담당자', '').astype(str).str.strip()
-            
-            # 반장은 본인 앞으로 온 '대기중' 건만 처리 가능
             my_pending = df_a[ (df_a['상태'] == '대기중') & (df_a['승인담당자'] == foreman_name) ]
-            
             if len(my_pending) > 0:
                 st.metric(label="🔔 1차 승인 대기", value=f"{len(my_pending)}건", delta="결재 필요")
-            else: 
-                st.info(f"🔔 {foreman_name}님 앞으로 온 결재 요청이 없습니다.")
-            
+            else: st.info(f"🔔 {foreman_name}님 앞으로 온 결재 요청이 없습니다.")
             if not my_pending.empty:
                 opts = [f"[{i}] {r['이름']} ({r['구분']})" for i, r in my_pending.iterrows()]
                 sel_a = st.selectbox("처리할 내역 선택", opts)
@@ -563,6 +563,5 @@ with tab5:
                         if st.button("⛔ 반려", use_container_width=True):
                             update_attendance_status(idx_a, "반려")
                             st.rerun()
-
     elif pw:
         st.error("비밀번호 불일치")
