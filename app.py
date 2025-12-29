@@ -64,7 +64,7 @@ def get_worksheet(sheet_name):
     client = gspread.authorize(creds)
     return client.open("사내공지사항DB").worksheet(sheet_name)
 
-# --- [핵심 수정] 데이터 로드 (KeyError 방지) ---
+# --- [데이터 로드] ---
 @st.cache_data(ttl=600)
 def load_data(sheet_name, company_name):
     try:
@@ -72,7 +72,7 @@ def load_data(sheet_name, company_name):
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
         
-        # [수정] 데이터가 비어있거나 컬럼이 없을 경우 강제로 컬럼 생성 (에러 방지)
+        # 데이터가 비어있거나 컬럼이 없을 경우 강제로 컬럼 생성 (에러 방지)
         if df.empty or '상태' not in df.columns:
             if sheet_name == "근태신청":
                 df = pd.DataFrame(columns=['소속', '작성일', '이름', '구분', '날짜및시간', '사유', '상태', '비밀번호', '승인자'])
@@ -90,7 +90,6 @@ def load_data(sheet_name, company_name):
             df = df[df['소속'] == company_name]
         return df
     except Exception as e:
-        # 에러 발생 시 빈 데이터프레임 리턴하여 앱이 멈추지 않게 함
         return pd.DataFrame()
 
 # --- [함수] 저장 로직 ---
@@ -106,7 +105,6 @@ def save_suggestion(company, title, content, author, is_private, password):
 
 def save_attendance(company, name, type_val, date_range_str, reason, password, approver):
     sheet = get_worksheet("근태신청")
-    # 구글 시트에 헤더 순서대로 저장: 소속, 작성일, 이름, 구분, 날짜및시간, 사유, 상태, 비밀번호, 승인자
     sheet.append_row([company, get_korea_time(), name, type_val, date_range_str, reason, "대기중", str(password), approver])
     st.cache_data.clear()
 
@@ -207,14 +205,13 @@ with tab3:
 
     events = []
     
-    # [수정] 공휴일 중복 제거 (루프 1회만 추가)
+    # 공휴일
     kr_holidays = holidays.KR(years=[datetime.now().year, datetime.now().year+1])
     for d, n in kr_holidays.items():
         events.append({
             "title": n, 
             "start": str(d), 
             "color": "#FF4B4B",
-            # display 속성 제거 (텍스트 보이게)
             "extendedProps": {"type": "holiday"}
         })
 
@@ -256,7 +253,6 @@ with tab3:
             })
 
     if view_type == "달력":
-        # [핵심 수정] 달력 내부 CSS 직접 주입 (글자색 검정 강제)
         calendar_css = """
             .fc { background: white !important; }
             .fc-daygrid-day-number { color: #000000 !important; font-weight: bold !important; text-decoration: none !important; }
@@ -268,7 +264,7 @@ with tab3:
             events=events, 
             options={"initialView": "dayGridMonth", "height": 750}, 
             key=st.session_state['calendar_key'], 
-            custom_css=calendar_css # CSS 적용
+            custom_css=calendar_css
         )
         
         if cal.get("callback") == "eventClick":
@@ -290,9 +286,27 @@ with tab3:
                 if month_stats:
                     st.dataframe(pd.DataFrame(list(month_stats.items()), columns=["월", "사용일수"]).sort_values("월"), hide_index=True)
     else:
-        st.dataframe(pd.DataFrame(events))
+        # [수정] 목록 보기 개선: 공휴일 제외 및 컬럼 숨김
+        filtered_events = [e for e in events if e.get("extendedProps", {}).get("type") != "holiday"]
+        if filtered_events:
+            list_df = pd.DataFrame(filtered_events)
+            st.dataframe(
+                list_df,
+                column_config={
+                    "color": None, 
+                    "extendedProps": None, 
+                    "resourceId": None,
+                    "title": "내용",
+                    "start": "시작",
+                    "end": "종료"
+                },
+                hide_index=True,
+                use_container_width=True
+            )
+        else:
+            st.info("등록된 일정이 없습니다.")
 
-# 4. 근태신청 (날짜/시간 선택 강제)
+# 4. 근태신청
 with tab4:
     st.write("### 📅 연차/근태 신청")
     if st.button("📝 신청서 작성", on_click=toggle_attend): pass
@@ -310,17 +324,18 @@ with tab4:
                 
                 st.markdown("---")
                 
-                # [핵심 수정] 타이핑 금지 -> 라디오버튼 + DateInput/TimeInput
-                date_mode = st.radio("기간 설정", ["하루/반차 (단일)", "기간 (연차/휴가)"], horizontal=True)
+                date_mode = st.radio("기간 설정", ["하루/반차/외출 (단일)", "기간 (연차/휴가)"], horizontal=True)
                 final_date_str = ""
                 
-                if date_mode == "하루/반차 (단일)":
-                    st.write("**📆 일시 선택**")
-                    dc1, dc2 = st.columns(2)
+                if date_mode == "하루/반차/외출 (단일)":
+                    st.write("**📆 일시 및 시간 선택**")
+                    # [수정] 날짜, 시작시간, 종료시간 분리 입력
+                    dc1, dc2, dc3 = st.columns(3)
                     d_sel = dc1.date_input("날짜 선택", value=datetime.now())
-                    t_sel = dc2.time_input("시간 선택", value=time(9,0))
+                    t_start = dc2.time_input("시작 시간", value=time(9,0))
+                    t_end = dc3.time_input("종료 시간", value=time(18,0))
                     
-                    final_date_str = f"{d_sel} ({t_sel.strftime('%H:%M')})"
+                    final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
                 
                 else:
                     st.write("**📆 기간 선택**")
@@ -404,7 +419,6 @@ with tab5:
         m_tab1, m_tab2, m_tab3 = st.tabs(["✅ 결재 관리", "📢 공지/일정", "📊 통계"])
         with m_tab1:
             df = load_data("근태신청", COMPANY)
-            # [수정] KeyError 방지: '상태' 컬럼 확인
             if not df.empty and '상태' in df.columns:
                 pend = df[df['상태'].isin(['대기중'])]
                 if manager_id != "MASTER":
@@ -430,14 +444,20 @@ with tab5:
 
         with m_tab2:
             st.write("공지사항 및 일정 등록")
-            with st.form("n_form"):
+            with st.form("n_form", clear_on_submit=True):
                 type_sel = st.selectbox("유형", ["공지사항", "일정"])
                 t = st.text_input("제목")
                 c = st.text_area("내용")
+                
+                # [수정] 중요 체크박스 복구
+                is_imp = st.checkbox("중요 공지 (상단 고정)", value=False)
+                
                 d_s = st.date_input("날짜(일정용)", value=datetime.now())
+                
                 if st.form_submit_button("등록"):
                     if type_sel == "공지사항":
-                        save_notice(COMPANY, t, c, False)
+                        # [수정] 체크박스 값 전달
+                        save_notice(COMPANY, t, c, is_imp)
                     else:
                         save_schedule(COMPANY, str(d_s), t, c, manager_name)
                     st.toast("등록되었습니다.")
