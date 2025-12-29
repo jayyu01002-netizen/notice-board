@@ -63,7 +63,7 @@ def get_worksheet(sheet_name):
     client = gspread.authorize(creds)
     return client.open("사내공지사항DB").worksheet(sheet_name)
 
-# --- [데이터 로드] (핵심 수정 부분) ---
+# --- [데이터 로드] ---
 @st.cache_data(ttl=300)
 def load_data(sheet_name, company_name):
     try:
@@ -71,14 +71,14 @@ def load_data(sheet_name, company_name):
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
         
-        # [수정 완료] 기존에는 '상태' 컬럼이 없으면 데이터를 지워버리는 버그가 있었습니다.
-        # 공지사항에는 '상태' 컬럼이 없으므로 무조건 지워졌던 것입니다.
-        # 이제 데이터가 비어있을(df.empty) 때만 초기화를 진행합니다.
-        
+        # [수정 완료] 기존 버그 수정
+        # '상태' 컬럼 유무를 검사하던 코드를 삭제했습니다.
+        # 이제 데이터가 아예 비어있을 때만 컬럼을 새로 만듭니다.
         if df.empty:
             if sheet_name == "근태신청":
                 df = pd.DataFrame(columns=['소속', '작성일', '이름', '구분', '날짜및시간', '사유', '상태', '비밀번호', '승인자'])
             elif sheet_name == "공지사항":
+                # 공지사항은 원래 '상태' 컬럼이 없으므로 이 부분이 정상적으로 실행됩니다.
                 df = pd.DataFrame(columns=['소속', '작성일', '제목', '내용', '중요'])
             elif sheet_name == "건의사항":
                 df = pd.DataFrame(columns=['소속', '작성일', '제목', '내용', '작성자', '비공개', '비밀번호'])
@@ -91,13 +91,11 @@ def load_data(sheet_name, company_name):
         # 소속 필터링 (공백 제거 포함)
         if '소속' in df.columns:
             df['소속'] = df['소속'].str.strip()
-            # 검색하려는 회사명도 공백 제거
             target_company = company_name.strip()
             df = df[df['소속'] == target_company]
             
         return df
     except Exception as e:
-        # 에러 발생 시 빈 프레임 반환
         return pd.DataFrame()
 
 # --- [함수] 저장 로직 ---
@@ -175,9 +173,7 @@ with tab1:
     if df.empty:
         st.info("등록된 공지사항이 없습니다.")
     else:
-        # 최신글이 위로 오게 역순 정렬
         for idx, row in df.iloc[::-1].iterrows():
-            # 중요 컬럼 확인 (헤더가 제대로 있는지 안전하게 확인)
             is_imp = False
             if '중요' in row:
                 is_imp = str(row['중요']).upper() == "TRUE"
