@@ -11,33 +11,33 @@ from streamlit_calendar import calendar
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# --- [스타일] CSS (캘린더 강제 표시를 위한 강력한 스타일 적용) ---
+# --- [설정] 중간 관리자 계정 설정 (비밀번호:관리자명) ---
+# 필요에 따라 비밀번호를 변경하세요.
+MIDDLE_MANAGERS = {
+    "1111": "인사팀장",
+    "2222": "생산팀장",
+    "3333": "영업팀장",
+    "4444": "품질팀장"
+}
+
+# --- [스타일] CSS ---
 st.markdown("""
 <style>
-    /* 기본 폰트 크기 조정 */
     div[data-testid="stMarkdownContainer"] p {
         font-size: 18px !important;
         line-height: 1.6 !important;
         word-break: keep-all !important;
     }
-    
-    /* 캘린더 이벤트 텍스트 스타일 */
     .fc-event-title {
         font-weight: bold !important;
         font-size: 0.85em !important;
         color: white !important;
     }
-    
-    /* [핵심] 캘린더 컨테이너 강제 높이 지정 (빈 화면 방지) */
     iframe[title="streamlit_calendar.calendar"] {
         height: 750px !important;
         min-height: 750px !important;
-        width: 100% !important;
         display: block !important;
-        visibility: visible !important;
     }
-    
-    /* 모바일 버튼 크기 최적화 */
     @media (max-width: 768px) {
         h1 { font-size: 2.0rem !important; word-break: keep-all !important; }
         div.stButton > button {
@@ -86,6 +86,7 @@ def save_suggestion(title, content, author, is_private, password):
 
 def save_attendance(name, type_val, target_time, reason, password):
     sheet = get_worksheet("근태신청")
+    # 초기 상태는 무조건 '대기중'
     sheet.append_row([get_korea_time(), name, type_val, target_time, reason, "대기중", str(password)])
     st.cache_data.clear()
 
@@ -199,24 +200,23 @@ with tab2:
                                 st.markdown(r['내용'])
                                 st.caption(r['작성일'])
 
-# 3. 근무표
+# 3. 근무표 (최종승인 된 건만 표시)
 with tab3:
     st.write("### 📆 승인된 근무/휴가 현황")
-    st.caption("공휴일, 회사일정, 승인된 연차가 표시됩니다.")
+    st.caption("최종 승인된 일정만 달력에 표시됩니다.")
     
-    # 상단 버튼 및 뷰 모드
     c_btn, c_view = st.columns([0.6, 0.4])
     with c_btn:
         if st.button("🔄 근무표 새로고침", key="cal_refresh", use_container_width=True):
             st.cache_data.clear()
-            st.session_state['calendar_key'] = str(uuid.uuid4()) # 강제 갱신용 키 변경
+            st.session_state['calendar_key'] = str(uuid.uuid4())
             st.rerun()
     with c_view:
         view_type = st.radio("보기", ["달력", "목록"], horizontal=True, label_visibility="collapsed", key="view_mode")
 
     events = []
     
-    # [1] 공휴일 추가
+    # [1] 공휴일
     kr_holidays = holidays.KR(years=[datetime.now().year, datetime.now().year + 1])
     for date_obj, name in kr_holidays.items():
         events.append({
@@ -236,42 +236,39 @@ with tab3:
              "extendedProps": {"content": "대한민국 공휴일"}
         })
 
-    # [2] 회사 일정 (관리자가 등록한 일정 - 기간 처리 포함)
+    # [2] 회사 일정
     df_sch = load_data("일정관리")
     if not df_sch.empty:
         for idx, row in df_sch.iterrows():
             raw_date = row['날짜']
             start_date = raw_date
             end_date = raw_date
-            
-            # 기간(~) 처리 로직
             if "~" in raw_date:
                 try:
                     parts = raw_date.split("~")
                     start_date = parts[0].strip()
                     temp_end = parts[1].strip()
-                    # 종료일을 +1일 해서 달력에 꽉 차게 표시
                     end_obj = datetime.strptime(temp_end, "%Y-%m-%d") + timedelta(days=1)
                     end_date = end_obj.strftime("%Y-%m-%d")
                 except:
-                    start_date = raw_date
-                    end_date = raw_date
+                    pass
 
             events.append({
                 "title": f"📢 {row['제목']}",
                 "start": start_date,
                 "end": end_date,
-                "color": "#8A2BE2", # 보라색
+                "color": "#8A2BE2",
                 "allDay": True,
                 "extendedProps": {"content": row.get('내용', '')}
             })
 
-    # [3] 근태 신청
+    # [3] 근태 신청 (오직 '최종승인'만 표시)
     df_cal = load_data("근태신청")
     if not df_cal.empty:
         try:
             df_cal['상태'] = df_cal['상태'].astype(str).str.strip()
-            approved_df = df_cal[df_cal['상태'] == '승인']
+            # [변경] '승인' 또는 '최종승인'된 건만 표시 (기존 데이터 호환을 위해 포함)
+            approved_df = df_cal[df_cal['상태'].isin(['최종승인', '승인'])]
             
             for index, row in approved_df.iterrows():
                 leave_type = str(row.get('구분', '')).strip()
@@ -284,7 +281,6 @@ with tab3:
                 start_d = raw_date.split(' ')[0]
                 end_d = start_d
                 
-                # 기간 입력 처리
                 if "~" in raw_date:
                     try:
                         clean_range = raw_date.split('(')[0].strip()
@@ -309,7 +305,6 @@ with tab3:
             pass
 
     if view_type == "달력":
-        # [핵심] 높이를 숫자로 지정하여 라이브러리 호환성 확보
         calendar_options = {
             "headerToolbar": {
                 "left": "today prev,next",
@@ -318,10 +313,9 @@ with tab3:
             },
             "initialView": "dayGridMonth",
             "locale": "ko",
-            "height": 750,      # 숫자 750 (px 제외)
-            "contentHeight": 700, # 컨텐츠 높이도 지정
-            "dayMaxEvents": 3,
-            "handleWindowResize": True # 창 크기 조절 시 자동 리사이징
+            "height": 750,
+            "contentHeight": 700,
+            "dayMaxEvents": 3
         }
         
         dynamic_key = f"cal_{st.session_state['calendar_key']}_{len(events)}"
@@ -329,13 +323,12 @@ with tab3:
         cal_return = calendar(
             events=events,
             options=calendar_options,
-            key=dynamic_key, # 키가 다르면 컴포넌트를 아예 새로 그립니다.
+            key=dynamic_key,
             custom_css="""
             .fc { background-color: white; padding: 10px; border-radius: 8px; color: black; }
             """
         )
         
-        # 클릭 이벤트 처리
         if cal_return.get("callback") == "eventClick":
             clicked_event = cal_return["eventClick"]["event"]
             title = clicked_event["title"]
@@ -375,9 +368,7 @@ with tab4:
                 
                 type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근", "예비군/훈련"])
                 
-                # [수정] 기간 선택 안내
                 st.caption("💡 며칠씩 쉴 경우 '기간/시간' 칸에 '1/1~1/3' 처럼 적어주세요.")
-                
                 c3, c4 = st.columns(2)
                 kst_now = datetime.now(pytz.timezone('Asia/Seoul'))
                 with c3: date_val = st.date_input("시작 날짜", value=kst_now)
@@ -388,14 +379,13 @@ with tab4:
                     if not name or not pw_att:
                         st.warning("이름과 비밀번호는 필수입니다.")
                     else:
-                        # 사용자가 입력한 기간이 있으면 그것을 우선 사용
                         if time_val and "~" in time_val:
                              dt = f"{time_val}" 
                         else:
                              dt = f"{date_val} ({time_val})" if time_val else str(date_val)
                         
                         save_attendance(name, type_val, dt, reason, pw_att)
-                        st.success("신청되었습니다.")
+                        st.success("신청되었습니다. (대기중)")
                         st.session_state['show_attend_form'] = False
                         st.rerun()
     
@@ -422,22 +412,28 @@ with tab4:
                     for idx, row in my_result.iloc[::-1].iterrows():
                         status = row.get("상태", "대기중")
                         color = "orange"
-                        if status == "승인": color = "green"
+                        if status == "최종승인": color = "green"
+                        elif status == "1차승인": color = "blue" # 파란색 (중간승인)
                         elif status == "반려": color = "red"
                         with st.container(border=True):
                             st.markdown(f"**{row['구분']}** - :{color}[**{status}**]")
                             st.text(f"일시: {row['날짜및시간']}")
                             st.caption(f"사유: {row['사유']} (신청일: {row['신청일']})")
 
-# 5. 관리자
+# 5. 관리자 (2단계 승인 시스템 적용)
 with tab5:
     st.write("🔒 관리자 전용")
     pw = st.text_input("비밀번호", type="password")
     
+    # -------------------------------------------------------------
+    # [A] 최고 관리자 (Super Admin) - 기존 비밀번호
+    # 역할: '1차승인' 건을 '최종승인' 처리
+    # -------------------------------------------------------------
     if str(pw).strip() == str(st.secrets["admin_password"]).strip():
-        st.success("관리자 접속 성공")
-        mode = st.radio("작업", ["📝 공지쓰기", "📆 일정추가(회사)", "🔧 공지관리", "🔧 건의함관리", "✅ 근태승인/관리"])
+        st.success("🌟 최고 관리자 접속")
+        mode = st.radio("작업", ["📝 공지쓰기", "📆 일정추가(회사)", "🔧 공지관리", "🔧 건의함관리", "✅ 최종승인/관리"])
         
+        # ... (공지, 일정, 건의함 로직은 기존과 동일) ...
         if mode == "📝 공지쓰기":
             with st.form("new_n"):
                 t = st.text_input("제목")
@@ -447,47 +443,31 @@ with tab5:
                     save_notice(t, c, i)
                     st.toast("등록됨")
         
-        # [핵심] 일정 추가 시 '기간 선택' 가능 (멀티 데이)
         elif mode == "📆 일정추가(회사)":
-            st.info("회사 전체 일정을 등록합니다. (기간 선택 가능)")
+            st.info("회사 전체 일정을 등록합니다.")
             with st.form("new_sch"):
-                # 기간 선택이 가능한 Date Input
-                d_range = st.date_input(
-                    "날짜 선택 (시작일과 종료일을 차례로 터치하세요)", 
-                    value=[],
-                    min_value=datetime.today() - timedelta(days=365),
-                    max_value=datetime.today() + timedelta(days=365)
-                )
-                sch_title = st.text_input("일정 제목 (예: 전체 워크샵)")
+                d_range = st.date_input("날짜 선택", value=[], min_value=datetime.today()-timedelta(days=365))
+                sch_title = st.text_input("일정 제목")
                 sch_content = st.text_area("상세 내용")
                 
                 if st.form_submit_button("일정 등록"):
-                    if len(d_range) == 2:
-                        # 기간 (시작~종료)
+                    if len(d_range) >= 1:
                         start_s = d_range[0].strftime("%Y-%m-%d")
-                        end_s = d_range[1].strftime("%Y-%m-%d")
-                        date_str = f"{start_s} ~ {end_s}"
-                        save_schedule(date_str, sch_title, sch_content, "관리자")
-                        st.success(f"기간 일정 ({date_str})이 등록되었습니다.")
-                    elif len(d_range) == 1:
-                        # 하루
-                        date_str = d_range[0].strftime("%Y-%m-%d")
-                        save_schedule(date_str, sch_title, sch_content, "관리자")
-                        st.success(f"하루 일정 ({date_str})이 등록되었습니다.")
+                        end_s = d_range[-1].strftime("%Y-%m-%d") if len(d_range) > 1 else start_s
+                        date_str = f"{start_s} ~ {end_s}" if start_s != end_s else start_s
+                        save_schedule(date_str, sch_title, sch_content, "최고관리자")
+                        st.success(f"{date_str} 일정 등록 완료")
                     else:
-                        st.warning("날짜를 선택해주세요.")
-
+                        st.warning("날짜를 선택하세요")
+            
             st.markdown("---")
-            st.write("🗑️ **등록된 일정 삭제**")
             df_sch = load_data("일정관리")
             if not df_sch.empty:
-                del_sch = st.selectbox("삭제할 일정 선택", [f"[{i}] {r['날짜']} : {r['제목']}" for i, r in df_sch.iterrows()])
-                if st.button("선택한 일정 삭제", type="primary"):
+                del_sch = st.selectbox("삭제할 일정", [f"[{i}] {r['날짜']} : {r['제목']}" for i, r in df_sch.iterrows()])
+                if st.button("삭제", type="primary"):
                     idx = int(del_sch.split(']')[0].replace('[',''))
                     delete_row("일정관리", idx)
                     st.rerun()
-            else:
-                st.caption("등록된 일정이 없습니다.")
 
         elif mode == "🔧 공지관리":
             df = load_data("공지사항")
@@ -518,22 +498,23 @@ with tab5:
                     delete_row("건의사항", int(sel_s.split(']')[0].replace('[','')))
                     st.rerun()
 
-        elif mode == "✅ 근태승인/관리":
-            st.write("### ⚡ 근태 신청 처리")
+        elif mode == "✅ 최종승인/관리":
+            st.write("### 👑 최종 승인 대기 목록 (1차 승인된 건)")
             df_a = load_data("근태신청")
             
             if df_a.empty:
                 st.info("데이터가 없습니다.")
             else:
                 df_a['상태'] = df_a['상태'].astype(str).str.strip()
-                pending_df = df_a[df_a['상태'] == '대기중']
+                # [필터] '1차승인' 된 것만 가져옴
+                final_pending = df_a[df_a['상태'] == '1차승인']
                 
-                if pending_df.empty:
-                    st.info("✅ 현재 처리할 대기 문서가 없습니다.")
+                if final_pending.empty:
+                    st.info("✅ 현재 최종 승인할 대기 문서가 없습니다.")
                 else:
-                    st.warning(f"처리가 필요한 건이 {len(pending_df)}개 있습니다.")
+                    st.warning(f"최종 승인이 필요한 건이 {len(final_pending)}개 있습니다.")
                     
-                    opts = [f"[{i}] {r['이름']} ({r['구분']})" for i, r in pending_df.iterrows()]
+                    opts = [f"[{i}] {r['이름']} ({r['구분']})" for i, r in final_pending.iterrows()]
                     sel_a = st.selectbox("처리할 내역 선택", opts)
                     
                     if sel_a:
@@ -541,27 +522,69 @@ with tab5:
                         row_a = df_a.loc[idx_a]
                         
                         with st.container(border=True):
-                            st.info(f"👤 **{row_a['이름']}**님의 신청서")
+                            st.info(f"👤 **{row_a['이름']}**")
                             st.write(f"일시: {row_a['날짜및시간']}")
                             st.write(f"사유: {row_a['사유']}")
-                            st.caption(f"비밀번호: {row_a.get('비밀번호', '없음')}")
+                            st.caption(f"현재상태: {row_a['상태']}")
                         
-                        c_app, c_rej, c_del = st.columns(3)
+                        c_app, c_rej = st.columns(2)
                         with c_app:
-                            if st.button("✅ 승인", use_container_width=True):
-                                update_attendance_status(idx_a, "승인")
-                                st.success("승인됨.")
+                            if st.button("👑 최종 승인 (달력게시)", use_container_width=True):
+                                update_attendance_status(idx_a, "최종승인")
+                                st.success("최종 승인 완료! 달력에 표시됩니다.")
                                 st.rerun()
                         with c_rej:
                             if st.button("⛔ 반려", use_container_width=True):
                                 update_attendance_status(idx_a, "반려")
-                                st.warning("반려됨.")
+                                st.warning("반려 처리되었습니다.")
                                 st.rerun()
-                        with c_del:
-                            if st.button("🗑️ 영구 삭제", type="primary", use_container_width=True):
-                                delete_row("근태신청", idx_a)
-                                st.error("데이터가 삭제되었습니다.")
-                                st.rerun()
+
+    # -------------------------------------------------------------
+    # [B] 중간 관리자 (Middle Manager)
+    # 역할: '대기중' 건을 '1차승인' 처리
+    # -------------------------------------------------------------
+    elif str(pw).strip() in MIDDLE_MANAGERS:
+        manager_name = MIDDLE_MANAGERS[str(pw).strip()]
+        st.success(f"👤 {manager_name}님 접속 (중간 관리자)")
+        
+        st.write("### 📋 1차 승인 대기 목록")
+        df_a = load_data("근태신청")
+        
+        if df_a.empty:
+            st.info("데이터가 없습니다.")
+        else:
+            df_a['상태'] = df_a['상태'].astype(str).str.strip()
+            # [필터] '대기중' 인 것만 가져옴
+            middle_pending = df_a[df_a['상태'] == '대기중']
+            
+            if middle_pending.empty:
+                st.info("✅ 현재 처리할 대기 문서가 없습니다.")
+            else:
+                st.warning(f"1차 승인이 필요한 건이 {len(middle_pending)}개 있습니다.")
+                
+                opts = [f"[{i}] {r['이름']} ({r['구분']})" for i, r in middle_pending.iterrows()]
+                sel_a = st.selectbox("처리할 내역 선택", opts)
+                
+                if sel_a:
+                    idx_a = int(sel_a.split(']')[0].replace('[',''))
+                    row_a = df_a.loc[idx_a]
+                    
+                    with st.container(border=True):
+                        st.info(f"신청자: **{row_a['이름']}**")
+                        st.write(f"일시: {row_a['날짜및시간']}")
+                        st.write(f"사유: {row_a['사유']}")
+                    
+                    c_app, c_rej = st.columns(2)
+                    with c_app:
+                        if st.button("✅ 1차 승인", use_container_width=True):
+                            update_attendance_status(idx_a, "1차승인")
+                            st.success("1차 승인 완료. 최종 관리자에게 넘어갑니다.")
+                            st.rerun()
+                    with c_rej:
+                        if st.button("⛔ 반려", use_container_width=True):
+                            update_attendance_status(idx_a, "반려")
+                            st.warning("반려 처리되었습니다.")
+                            st.rerun()
 
     elif pw:
         st.error("비밀번호 불일치")
