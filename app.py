@@ -15,10 +15,10 @@ st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout
 
 # --- [설정] 관리자 및 회사 정보 ---
 FOREMEN = {
-    "9999": "JK 조장", "8888": "JX 메인 조장", "7777": "JX 어퍼 조장",
-    "6666": "MX5 조장", "5555": "피더 조장"
+    "JK 조장", "JX 메인 조장", "JX 어퍼 조장",
+    "MX5 조장", "피더 조장"
 }
-MIDDLE_MANAGERS = {"4444": "반장"}
+MIDDLE_MANAGERS = {"반장"}
 
 # 모든 관리자 통합 (로그인 선택용)
 ALL_MANAGERS = {**FOREMEN, **MIDDLE_MANAGERS}
