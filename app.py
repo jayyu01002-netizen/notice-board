@@ -13,15 +13,16 @@ import os
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# --- [설정] 관리자 및 회사 정보 ---
-FOREMEN = {
+# --- [설정] 관리자 및 회사 정보 (숫자 ID 제거 및 리스트로 변경) ---
+FOREMEN = [
     "JK 조장", "JX 메인 조장", "JX 어퍼 조장",
     "MX5 조장", "피더 조장"
-}
-MIDDLE_MANAGERS = {"반장"}
+]
 
-# 모든 관리자 통합 (로그인 선택용)
-ALL_MANAGERS = {**FOREMEN, **MIDDLE_MANAGERS}
+MIDDLE_MANAGERS = ["반장"]
+
+# 모든 관리자 통합 (리스트 합치기)
+ALL_MANAGERS = FOREMEN + MIDDLE_MANAGERS
 
 # 회사별 설정
 COMPANIES = {
@@ -292,8 +293,8 @@ with tab4:
                 
                 type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근"])
                 
-                # [수정] 승인자에 조장 + 반장 포함
-                approver = st.selectbox("승인 담당자", list(ALL_MANAGERS.values()))
+                # [수정] 승인 담당자 선택 (리스트 그대로 사용)
+                approver = st.selectbox("승인 담당자", ALL_MANAGERS)
                 
                 st.markdown("---")
                 # [수정] 날짜 및 시간 선택 개선
@@ -343,27 +344,26 @@ with tab4:
 with tab5:
     st.subheader("⚙️ 관리자 및 조장/반장 전용")
     
-    # [수정] 통합 로그인 시스템
+    # [수정] 통합 로그인 시스템 (이름 기반)
     if 'logged_in_manager' not in st.session_state:
         user_db = load_user_db()
         
-        # 1. 사용자 선택
-        selected_id = st.selectbox(
+        # 1. 사용자 선택 (숫자 ID 제거, 이름 리스트 사용)
+        selected_name = st.selectbox(
             "관리자(조장/반장) 선택", 
-            options=["선택안함"] + list(ALL_MANAGERS.keys()),
-            format_func=lambda x: f"{ALL_MANAGERS[x]} ({x})" if x in ALL_MANAGERS else "선택해주세요"
+            options=["선택안함"] + ALL_MANAGERS
         )
         
-        if selected_id != "선택안함":
+        if selected_name != "선택안함":
             # 2. 비밀번호 확인 로직
-            if selected_id not in user_db:
-                st.warning("🔒 최초 접속입니다. 비밀번호를 설정해주세요.")
+            if selected_name not in user_db:
+                st.warning(f"🔒 '{selected_name}'님은 최초 접속입니다. 비밀번호를 설정해주세요.")
                 with st.form("init_pw"):
                     new_pw = st.text_input("새 비밀번호", type="password")
                     chk_pw = st.text_input("비밀번호 확인", type="password")
                     if st.form_submit_button("비밀번호 등록"):
                         if new_pw == chk_pw and new_pw:
-                            user_db[selected_id] = new_pw
+                            user_db[selected_name] = new_pw
                             save_user_db(user_db)
                             st.success("설정 완료! 다시 로그인해주세요.")
                             st.rerun()
@@ -372,13 +372,13 @@ with tab5:
             else:
                 input_pw = st.text_input("비밀번호 입력", type="password")
                 if st.button("로그인"):
-                    if input_pw == user_db[selected_id]:
-                        st.session_state['logged_in_manager'] = selected_id
+                    if input_pw == user_db[selected_name]:
+                        st.session_state['logged_in_manager'] = selected_name
                         st.rerun()
                     else:
                         st.error("비밀번호가 틀렸습니다.")
                         
-        # 최고 관리자 (Secrets 사용) 백도어
+        # 최고 관리자 (Secrets 사용)
         with st.expander("시스템 최고 관리자"):
             master_pw = st.text_input("Master PW", type="password")
             if st.button("Master Login"):
@@ -389,7 +389,7 @@ with tab5:
     else:
         # --- 로그인 성공 후 화면 ---
         manager_id = st.session_state['logged_in_manager']
-        manager_name = ALL_MANAGERS.get(manager_id, "최고 관리자")
+        manager_name = manager_id # 이름이 곧 ID
         
         c_logout, _ = st.columns([0.2, 0.8])
         if c_logout.button("로그아웃"):
@@ -419,7 +419,7 @@ with tab5:
                         st.write(f"사유: {r['사유']}")
                         c_app, c_rej = st.columns(2)
                         if c_app.button("승인", key=f"app_{i}"):
-                            update_attendance_status("근태신청", i, "최종승인") # 조장/반장 전결 처리 (필요시 단계 구분 가능)
+                            update_attendance_status("근태신청", i, "최종승인")
                             st.success("승인되었습니다.")
                             st.rerun()
                         if c_rej.button("반려", key=f"rej_{i}"):
