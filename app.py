@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime, timedelta # 날짜 계산용 추가
+from datetime import datetime, timedelta
 import uuid
 import pytz
 import holidays
@@ -11,34 +11,39 @@ from streamlit_calendar import calendar
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# --- [스타일] CSS ---
+# --- [스타일] CSS (캘린더 강제 표시를 위한 강력한 스타일 적용) ---
 st.markdown("""
 <style>
+    /* 기본 폰트 크기 조정 */
     div[data-testid="stMarkdownContainer"] p {
         font-size: 18px !important;
         line-height: 1.6 !important;
         word-break: keep-all !important;
     }
+    
+    /* 캘린더 이벤트 텍스트 스타일 */
     .fc-event-title {
         font-weight: bold !important;
         font-size: 0.85em !important;
         color: white !important;
     }
-    .fc-toolbar-title {
-        font-size: 1.2em !important;
+    
+    /* [핵심] 캘린더 컨테이너 강제 높이 지정 (빈 화면 방지) */
+    iframe[title="streamlit_calendar.calendar"] {
+        height: 750px !important;
+        min-height: 750px !important;
+        width: 100% !important;
+        display: block !important;
+        visibility: visible !important;
     }
-    /* 모바일 달력 높이 강제 고정 및 렌더링 보정 */
+    
+    /* 모바일 버튼 크기 최적화 */
     @media (max-width: 768px) {
         h1 { font-size: 2.0rem !important; word-break: keep-all !important; }
         div.stButton > button {
             width: 100%;
             height: 3.5rem;
             font-size: 18px;
-        }
-        iframe[title="streamlit_calendar.calendar"] {
-            min-height: 600px !important;
-            height: 600px !important;
-            display: block !important;
         }
     }
 </style>
@@ -112,7 +117,6 @@ st.title("🏢 제이유 사내광장")
 
 if 'show_sugg_form' not in st.session_state: st.session_state['show_sugg_form'] = False
 if 'show_attend_form' not in st.session_state: st.session_state['show_attend_form'] = False
-# [중요] 캘린더 리렌더링을 위한 고유 키 관리
 if 'calendar_key' not in st.session_state: st.session_state['calendar_key'] = str(uuid.uuid4())
 
 def toggle_sugg(): st.session_state['show_sugg_form'] = not st.session_state['show_sugg_form']
@@ -200,12 +204,12 @@ with tab3:
     st.write("### 📆 승인된 근무/휴가 현황")
     st.caption("공휴일, 회사일정, 승인된 연차가 표시됩니다.")
     
+    # 상단 버튼 및 뷰 모드
     c_btn, c_view = st.columns([0.6, 0.4])
     with c_btn:
         if st.button("🔄 근무표 새로고침", key="cal_refresh", use_container_width=True):
             st.cache_data.clear()
-            # 새로고침 시 키 값을 변경하여 강제 리렌더링 유도
-            st.session_state['calendar_key'] = str(uuid.uuid4())
+            st.session_state['calendar_key'] = str(uuid.uuid4()) # 강제 갱신용 키 변경
             st.rerun()
     with c_view:
         view_type = st.radio("보기", ["달력", "목록"], horizontal=True, label_visibility="collapsed", key="view_mode")
@@ -232,7 +236,7 @@ with tab3:
              "extendedProps": {"content": "대한민국 공휴일"}
         })
 
-    # [2] 회사 일정 (기간 처리 로직 추가됨)
+    # [2] 회사 일정 (관리자가 등록한 일정 - 기간 처리 포함)
     df_sch = load_data("일정관리")
     if not df_sch.empty:
         for idx, row in df_sch.iterrows():
@@ -240,25 +244,24 @@ with tab3:
             start_date = raw_date
             end_date = raw_date
             
-            # "~" 가 있으면 기간으로 인식 (예: 2025-01-01 ~ 2025-01-03)
+            # 기간(~) 처리 로직
             if "~" in raw_date:
                 try:
                     parts = raw_date.split("~")
                     start_date = parts[0].strip()
                     temp_end = parts[1].strip()
-                    
-                    # [중요] 달력 라이브러리는 종료일 00:00까지를 의미하므로, 
-                    # 3일까지 꽉 채워 보여주려면 4일 00:00으로 설정해야 함 (+1일)
+                    # 종료일을 +1일 해서 달력에 꽉 차게 표시
                     end_obj = datetime.strptime(temp_end, "%Y-%m-%d") + timedelta(days=1)
                     end_date = end_obj.strftime("%Y-%m-%d")
                 except:
-                    start_date = raw_date # 에러나면 그냥 원래 값 사용
+                    start_date = raw_date
+                    end_date = raw_date
 
             events.append({
                 "title": f"📢 {row['제목']}",
                 "start": start_date,
-                "end": end_date, # 종료일 추가
-                "color": "#8A2BE2", 
+                "end": end_date,
+                "color": "#8A2BE2", # 보라색
                 "allDay": True,
                 "extendedProps": {"content": row.get('내용', '')}
             })
@@ -278,15 +281,13 @@ with tab3:
                 else: color = "#0275D8"
 
                 raw_date = str(row.get('날짜및시간', '')).strip()
+                start_d = raw_date.split(' ')[0]
+                end_d = start_d
                 
-                # 근태도 기간(~로 구분)일 경우 처리
-                start_d = raw_date.split(' ')[0] # 기본값
-                end_d = raw_date.split(' ')[0]
-                
+                # 기간 입력 처리
                 if "~" in raw_date:
                     try:
-                        # "2025-01-01 ~ 2025-01-03 (휴가)" 형태일 수 있음
-                        clean_range = raw_date.split('(')[0] # 괄호 뒤 날리기
+                        clean_range = raw_date.split('(')[0].strip()
                         parts = clean_range.split("~")
                         start_d = parts[0].strip()
                         temp_e = parts[1].strip()
@@ -308,6 +309,7 @@ with tab3:
             pass
 
     if view_type == "달력":
+        # [핵심] 높이를 숫자로 지정하여 라이브러리 호환성 확보
         calendar_options = {
             "headerToolbar": {
                 "left": "today prev,next",
@@ -316,31 +318,32 @@ with tab3:
             },
             "initialView": "dayGridMonth",
             "locale": "ko",
-            "height": "750px", 
-            "contentHeight": "auto",
-            "dayMaxEvents": 3 
+            "height": 750,      # 숫자 750 (px 제외)
+            "contentHeight": 700, # 컨텐츠 높이도 지정
+            "dayMaxEvents": 3,
+            "handleWindowResize": True # 창 크기 조절 시 자동 리사이징
         }
         
-        # [핵심] 키값에 데이터 길이와 랜덤값을 섞어 화면 갱신 보장
         dynamic_key = f"cal_{st.session_state['calendar_key']}_{len(events)}"
         
         cal_return = calendar(
             events=events,
             options=calendar_options,
-            key=dynamic_key,
+            key=dynamic_key, # 키가 다르면 컴포넌트를 아예 새로 그립니다.
             custom_css="""
             .fc { background-color: white; padding: 10px; border-radius: 8px; color: black; }
             """
         )
         
+        # 클릭 이벤트 처리
         if cal_return.get("callback") == "eventClick":
             clicked_event = cal_return["eventClick"]["event"]
             title = clicked_event["title"]
-            date_info = clicked_event["start"].split("T")[0]
+            s_date = clicked_event["start"].split("T")[0]
             content = clicked_event.get("extendedProps", {}).get("content", "내용 없음")
             
             st.info(f"📌 **{title}**")
-            st.write(f"일시: {date_info}")
+            st.write(f"날짜: {s_date}")
             st.write(f"내용: {content}")
             
     else:
@@ -372,21 +375,21 @@ with tab4:
                 
                 type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근", "예비군/훈련"])
                 
+                # [수정] 기간 선택 안내
+                st.caption("💡 며칠씩 쉴 경우 '기간/시간' 칸에 '1/1~1/3' 처럼 적어주세요.")
+                
                 c3, c4 = st.columns(2)
                 kst_now = datetime.now(pytz.timezone('Asia/Seoul'))
-                # [수정] 여기도 기간 선택 가능하게 변경 (하지만 단순화를 위해 단일 날짜 유지 또는 문자열로 받음)
-                # 여기서는 '하루' 신청이 기본이지만 사용자가 텍스트로 쓸 수 있게 안내
                 with c3: date_val = st.date_input("시작 날짜", value=kst_now)
-                with c4: time_val = st.text_input("기간/시간 (예: 1/1~1/3, 14시~16시)")
+                with c4: time_val = st.text_input("기간/시간 (예: 1/1~1/3)")
                 reason = st.text_input("사유")
                 
                 if st.form_submit_button("신청하기", use_container_width=True):
                     if not name or not pw_att:
                         st.warning("이름과 비밀번호는 필수입니다.")
                     else:
-                        # 날짜와 기간 정보를 합쳐서 저장 (달력 로직에서 파싱 가능하도록)
-                        if time_val and "~" in time_val and "시" not in time_val:
-                            # 사용자가 기간을 직접 입력한 경우 (예: 2025-01-01 ~ 2025-01-05)
+                        # 사용자가 입력한 기간이 있으면 그것을 우선 사용
+                        if time_val and "~" in time_val:
                              dt = f"{time_val}" 
                         else:
                              dt = f"{date_val} ({time_val})" if time_val else str(date_val)
@@ -444,33 +447,33 @@ with tab5:
                     save_notice(t, c, i)
                     st.toast("등록됨")
         
-        # [수정] 일정 추가 시 '기간 선택' 가능하도록 변경
+        # [핵심] 일정 추가 시 '기간 선택' 가능 (멀티 데이)
         elif mode == "📆 일정추가(회사)":
-            st.info("달력에 표시될 회사 전체 일정을 등록합니다.")
+            st.info("회사 전체 일정을 등록합니다. (기간 선택 가능)")
             with st.form("new_sch"):
-                # [핵심] 날짜 범위를 선택하도록 변경 (value=[] 빈 리스트 주면 선택 전까지 비어있음)
+                # 기간 선택이 가능한 Date Input
                 d_range = st.date_input(
-                    "날짜 선택 (시작일과 종료일을 클릭하세요)", 
+                    "날짜 선택 (시작일과 종료일을 차례로 터치하세요)", 
                     value=[],
                     min_value=datetime.today() - timedelta(days=365),
                     max_value=datetime.today() + timedelta(days=365)
                 )
-                sch_title = st.text_input("일정 제목 (예: 전체 회식)")
+                sch_title = st.text_input("일정 제목 (예: 전체 워크샵)")
                 sch_content = st.text_area("상세 내용")
                 
                 if st.form_submit_button("일정 등록"):
                     if len(d_range) == 2:
-                        # 시작일 ~ 종료일
+                        # 기간 (시작~종료)
                         start_s = d_range[0].strftime("%Y-%m-%d")
                         end_s = d_range[1].strftime("%Y-%m-%d")
                         date_str = f"{start_s} ~ {end_s}"
                         save_schedule(date_str, sch_title, sch_content, "관리자")
-                        st.success(f"{date_str} 일정이 등록되었습니다.")
+                        st.success(f"기간 일정 ({date_str})이 등록되었습니다.")
                     elif len(d_range) == 1:
-                        # 하루짜리
+                        # 하루
                         date_str = d_range[0].strftime("%Y-%m-%d")
                         save_schedule(date_str, sch_title, sch_content, "관리자")
-                        st.success("일정이 등록되었습니다.")
+                        st.success(f"하루 일정 ({date_str})이 등록되었습니다.")
                     else:
                         st.warning("날짜를 선택해주세요.")
 
