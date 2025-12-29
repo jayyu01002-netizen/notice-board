@@ -11,8 +11,7 @@ from streamlit_calendar import calendar
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
-# --- [설정] 중간 관리자 계정 설정 (비밀번호:관리자명) ---
-# 필요에 따라 비밀번호를 변경하세요.
+# --- [설정] 중간 관리자 계정 (비번:직책) ---
 MIDDLE_MANAGERS = {
     "1111": "인사팀장",
     "2222": "생산팀장",
@@ -37,6 +36,11 @@ st.markdown("""
         height: 750px !important;
         min-height: 750px !important;
         display: block !important;
+    }
+    /* 알림 박스 스타일 */
+    div[data-testid="stMetricValue"] {
+        font-size: 24px !important;
+        color: #FF4B4B !important;
     }
     @media (max-width: 768px) {
         h1 { font-size: 2.0rem !important; word-break: keep-all !important; }
@@ -86,7 +90,6 @@ def save_suggestion(title, content, author, is_private, password):
 
 def save_attendance(name, type_val, target_time, reason, password):
     sheet = get_worksheet("근태신청")
-    # 초기 상태는 무조건 '대기중'
     sheet.append_row([get_korea_time(), name, type_val, target_time, reason, "대기중", str(password)])
     st.cache_data.clear()
 
@@ -200,7 +203,7 @@ with tab2:
                                 st.markdown(r['내용'])
                                 st.caption(r['작성일'])
 
-# 3. 근무표 (최종승인 된 건만 표시)
+# 3. 근무표
 with tab3:
     st.write("### 📆 승인된 근무/휴가 현황")
     st.caption("최종 승인된 일정만 달력에 표시됩니다.")
@@ -252,7 +255,6 @@ with tab3:
                     end_date = end_obj.strftime("%Y-%m-%d")
                 except:
                     pass
-
             events.append({
                 "title": f"📢 {row['제목']}",
                 "start": start_date,
@@ -262,12 +264,11 @@ with tab3:
                 "extendedProps": {"content": row.get('내용', '')}
             })
 
-    # [3] 근태 신청 (오직 '최종승인'만 표시)
+    # [3] 근태 신청 (최종승인 or 승인 만 표시)
     df_cal = load_data("근태신청")
     if not df_cal.empty:
         try:
             df_cal['상태'] = df_cal['상태'].astype(str).str.strip()
-            # [변경] '승인' 또는 '최종승인'된 건만 표시 (기존 데이터 호환을 위해 포함)
             approved_df = df_cal[df_cal['상태'].isin(['최종승인', '승인'])]
             
             for index, row in approved_df.iterrows():
@@ -317,24 +318,15 @@ with tab3:
             "contentHeight": 700,
             "dayMaxEvents": 3
         }
-        
         dynamic_key = f"cal_{st.session_state['calendar_key']}_{len(events)}"
-        
-        cal_return = calendar(
-            events=events,
-            options=calendar_options,
-            key=dynamic_key,
-            custom_css="""
-            .fc { background-color: white; padding: 10px; border-radius: 8px; color: black; }
-            """
-        )
+        cal_return = calendar(events=events, options=calendar_options, key=dynamic_key,
+            custom_css=".fc { background-color: white; padding: 10px; border-radius: 8px; color: black; }")
         
         if cal_return.get("callback") == "eventClick":
             clicked_event = cal_return["eventClick"]["event"]
             title = clicked_event["title"]
             s_date = clicked_event["start"].split("T")[0]
             content = clicked_event.get("extendedProps", {}).get("content", "내용 없음")
-            
             st.info(f"📌 **{title}**")
             st.write(f"날짜: {s_date}")
             st.write(f"내용: {content}")
@@ -355,7 +347,6 @@ with tab3:
 # 4. 근태신청
 with tab4:
     st.write("### 📅 연차/근태 신청")
-    
     if st.button("📝 근태 신청서 작성 (터치)", on_click=toggle_attend, use_container_width=True): pass
     
     if st.session_state['show_attend_form']:
@@ -365,9 +356,7 @@ with tab4:
                 c1, c2 = st.columns(2)
                 with c1: name = st.text_input("이름 (필수)")
                 with c2: pw_att = st.text_input("비밀번호 (확인용)", type="password")
-                
                 type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근", "예비군/훈련"])
-                
                 st.caption("💡 며칠씩 쉴 경우 '기간/시간' 칸에 '1/1~1/3' 처럼 적어주세요.")
                 c3, c4 = st.columns(2)
                 kst_now = datetime.now(pytz.timezone('Asia/Seoul'))
@@ -379,61 +368,62 @@ with tab4:
                     if not name or not pw_att:
                         st.warning("이름과 비밀번호는 필수입니다.")
                     else:
-                        if time_val and "~" in time_val:
-                             dt = f"{time_val}" 
-                        else:
-                             dt = f"{date_val} ({time_val})" if time_val else str(date_val)
-                        
+                        if time_val and "~" in time_val: dt = f"{time_val}" 
+                        else: dt = f"{date_val} ({time_val})" if time_val else str(date_val)
                         save_attendance(name, type_val, dt, reason, pw_att)
                         st.success("신청되었습니다. (대기중)")
                         st.session_state['show_attend_form'] = False
                         st.rerun()
-    
     st.divider()
     st.write("#### 🔒 내 신청 결과 조회")
-    
     with st.form("my_attend_search"):
         col_search1, col_search2 = st.columns([1,1])
         with col_search1: search_name = st.text_input("이름")
         with col_search2: search_pw = st.text_input("비밀번호", type="password")
-            
         if st.form_submit_button("내역 조회", use_container_width=True):
             df_a = load_data("근태신청")
-            if df_a.empty:
-                st.info("데이터가 없습니다.")
-            elif not search_name or not search_pw:
-                st.warning("이름과 비밀번호를 입력해주세요.")
+            if df_a.empty: st.info("데이터가 없습니다.")
+            elif not search_name or not search_pw: st.warning("이름과 비밀번호를 입력해주세요.")
             else:
                 my_result = df_a[(df_a['이름'] == search_name) & (df_a['비밀번호'].astype(str) == str(search_pw))]
-                if my_result.empty:
-                    st.error("일치하는 내역이 없습니다.")
+                if my_result.empty: st.error("일치하는 내역이 없습니다.")
                 else:
                     st.success(f"총 {len(my_result)}건의 신청 내역이 있습니다.")
                     for idx, row in my_result.iloc[::-1].iterrows():
                         status = row.get("상태", "대기중")
                         color = "orange"
                         if status == "최종승인": color = "green"
-                        elif status == "1차승인": color = "blue" # 파란색 (중간승인)
+                        elif status == "1차승인": color = "blue"
                         elif status == "반려": color = "red"
                         with st.container(border=True):
                             st.markdown(f"**{row['구분']}** - :{color}[**{status}**]")
                             st.text(f"일시: {row['날짜및시간']}")
                             st.caption(f"사유: {row['사유']} (신청일: {row['신청일']})")
 
-# 5. 관리자 (2단계 승인 시스템 적용)
+# 5. 관리자
 with tab5:
     st.write("🔒 관리자 전용")
     pw = st.text_input("비밀번호", type="password")
     
     # -------------------------------------------------------------
-    # [A] 최고 관리자 (Super Admin) - 기존 비밀번호
-    # 역할: '1차승인' 건을 '최종승인' 처리
+    # [A] 최고 관리자 (Super Admin)
     # -------------------------------------------------------------
     if str(pw).strip() == str(st.secrets["admin_password"]).strip():
         st.success("🌟 최고 관리자 접속")
-        mode = st.radio("작업", ["📝 공지쓰기", "📆 일정추가(회사)", "🔧 공지관리", "🔧 건의함관리", "✅ 최종승인/관리"])
         
-        # ... (공지, 일정, 건의함 로직은 기존과 동일) ...
+        # [신규 기능] 알림(종모양) 표시
+        df_a = load_data("근태신청")
+        if not df_a.empty:
+            df_a['상태'] = df_a['상태'].astype(str).str.strip()
+            # [핵심] '대기중'이거나 '1차승인'인 건들을 모두 카운트 (관리자가 처리해야 할 대상)
+            pending_count = len(df_a[df_a['상태'].isin(['대기중', '1차승인'])])
+            if pending_count > 0:
+                st.metric(label="🔔 결재 대기 알림", value=f"{pending_count}건", delta="처리 필요", delta_color="inverse")
+            else:
+                st.info("🔔 현재 처리할 결재 건이 없습니다.")
+        
+        mode = st.radio("작업", ["📝 공지쓰기", "📆 일정추가(회사)", "🔧 공지관리", "🔧 건의함관리", "✅ 통합 결재 관리"])
+        
         if mode == "📝 공지쓰기":
             with st.form("new_n"):
                 t = st.text_input("제목")
@@ -449,7 +439,6 @@ with tab5:
                 d_range = st.date_input("날짜 선택", value=[], min_value=datetime.today()-timedelta(days=365))
                 sch_title = st.text_input("일정 제목")
                 sch_content = st.text_area("상세 내용")
-                
                 if st.form_submit_button("일정 등록"):
                     if len(d_range) >= 1:
                         start_s = d_range[0].strftime("%Y-%m-%d")
@@ -457,9 +446,7 @@ with tab5:
                         date_str = f"{start_s} ~ {end_s}" if start_s != end_s else start_s
                         save_schedule(date_str, sch_title, sch_content, "최고관리자")
                         st.success(f"{date_str} 일정 등록 완료")
-                    else:
-                        st.warning("날짜를 선택하세요")
-            
+                    else: st.warning("날짜를 선택하세요")
             st.markdown("---")
             df_sch = load_data("일정관리")
             if not df_sch.empty:
@@ -498,23 +485,20 @@ with tab5:
                     delete_row("건의사항", int(sel_s.split(']')[0].replace('[','')))
                     st.rerun()
 
-        elif mode == "✅ 최종승인/관리":
-            st.write("### 👑 최종 승인 대기 목록 (1차 승인된 건)")
-            df_a = load_data("근태신청")
+        elif mode == "✅ 통합 결재 관리":
+            st.write("### 👑 통합 결재 관리 (프리패스 가능)")
+            st.caption("대기중인 건과 1차 승인된 건을 모두 처리할 수 있습니다.")
             
             if df_a.empty:
                 st.info("데이터가 없습니다.")
             else:
-                df_a['상태'] = df_a['상태'].astype(str).str.strip()
-                # [필터] '1차승인' 된 것만 가져옴
-                final_pending = df_a[df_a['상태'] == '1차승인']
+                # [수정] '대기중' 과 '1차승인' 모두 가져오기 (슈퍼 권한)
+                final_pending = df_a[df_a['상태'].isin(['대기중', '1차승인'])]
                 
                 if final_pending.empty:
-                    st.info("✅ 현재 최종 승인할 대기 문서가 없습니다.")
+                    st.info("✅ 현재 승인 처리할 문서가 없습니다.")
                 else:
-                    st.warning(f"최종 승인이 필요한 건이 {len(final_pending)}개 있습니다.")
-                    
-                    opts = [f"[{i}] {r['이름']} ({r['구분']})" for i, r in final_pending.iterrows()]
+                    opts = [f"[{i}] {r['이름']} ({r['구분']}) - {r['상태']}" for i, r in final_pending.iterrows()]
                     sel_a = st.selectbox("처리할 내역 선택", opts)
                     
                     if sel_a:
@@ -529,7 +513,7 @@ with tab5:
                         
                         c_app, c_rej = st.columns(2)
                         with c_app:
-                            if st.button("👑 최종 승인 (달력게시)", use_container_width=True):
+                            if st.button("👑 최종 승인 (즉시 반영)", use_container_width=True):
                                 update_attendance_status(idx_a, "최종승인")
                                 st.success("최종 승인 완료! 달력에 표시됩니다.")
                                 st.rerun()
@@ -541,34 +525,36 @@ with tab5:
 
     # -------------------------------------------------------------
     # [B] 중간 관리자 (Middle Manager)
-    # 역할: '대기중' 건을 '1차승인' 처리
     # -------------------------------------------------------------
     elif str(pw).strip() in MIDDLE_MANAGERS:
         manager_name = MIDDLE_MANAGERS[str(pw).strip()]
         st.success(f"👤 {manager_name}님 접속 (중간 관리자)")
         
-        st.write("### 📋 1차 승인 대기 목록")
+        # [신규 기능] 알림 표시 (중간 관리자용)
         df_a = load_data("근태신청")
+        if not df_a.empty:
+            df_a['상태'] = df_a['상태'].astype(str).str.strip()
+            # 중간 관리자는 오직 '대기중'인 것만 카운트
+            mid_count = len(df_a[df_a['상태'] == '대기중'])
+            if mid_count > 0:
+                st.metric(label="🔔 1차 승인 대기 알림", value=f"{mid_count}건", delta="처리 필요")
+            else:
+                st.info("🔔 처리할 대기 문서가 없습니다.")
         
+        st.write("### 📋 1차 승인 처리")
         if df_a.empty:
             st.info("데이터가 없습니다.")
         else:
-            df_a['상태'] = df_a['상태'].astype(str).str.strip()
-            # [필터] '대기중' 인 것만 가져옴
             middle_pending = df_a[df_a['상태'] == '대기중']
-            
             if middle_pending.empty:
                 st.info("✅ 현재 처리할 대기 문서가 없습니다.")
             else:
-                st.warning(f"1차 승인이 필요한 건이 {len(middle_pending)}개 있습니다.")
-                
                 opts = [f"[{i}] {r['이름']} ({r['구분']})" for i, r in middle_pending.iterrows()]
                 sel_a = st.selectbox("처리할 내역 선택", opts)
                 
                 if sel_a:
                     idx_a = int(sel_a.split(']')[0].replace('[',''))
                     row_a = df_a.loc[idx_a]
-                    
                     with st.container(border=True):
                         st.info(f"신청자: **{row_a['이름']}**")
                         st.write(f"일시: {row_a['날짜및시간']}")
