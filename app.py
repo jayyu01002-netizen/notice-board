@@ -23,22 +23,22 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 목록 안보임 해결 & 버튼 줄바꿈 방지 & 드롭다운 분리
+# [스타일] CSS: 모바일 상단 잘림 해결 (여백 확보)
 # =========================================================
 st.markdown("""
 <style>
-    /* [1] 제목(h1) 모바일 최적화 */
+    /* [1] 제목(h1) 및 상단 여백 설정 (수정됨) */
     h1 { padding-top: 1rem !important; font-size: 2rem !important; }
+    
     @media (max-width: 640px) {
         h1 { font-size: 1.5rem !important; margin-top: 0.5rem !important; }
-        .block-container { padding-top: 2rem !important; }
+        /* [핵심 수정] 모바일에서 상단 여백을 2rem -> 5rem으로 늘려 잘림 방지 */
+        .block-container { padding-top: 5rem !important; } 
     }
 
     /* [2] 상단 불필요 요소 숨김 */
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
-    
-    /* [중요] Expander(목록) 글씨 숨김 코드 삭제됨 -> 이제 목록 잘 보입니다 */
     
     /* [3] 커스텀 네비게이션 (라디오 버튼) */
     div.row-widget.stRadio > div {
@@ -125,8 +125,8 @@ st.markdown("""
 JANGAN_FOREMEN = ["JK 조장", "JX 메인 조장", "JX 어퍼 조장", "MX5 조장", "피더 조장"]
 JANGAN_MID = ["반장"]
 
-# 2. 울산 제이유 관리자 목록
-ULSAN_APPROVERS = ["김대환", "김범진", "홍성곤"]
+# 2. 울산 제이유 관리자 목록 (오타 수정됨: 홍성곤 -> 홍승곤)
+ULSAN_APPROVERS = ["김대환", "김범진", "홍승곤"]
 
 ALL_MANAGERS = JANGAN_FOREMEN + JANGAN_MID + ULSAN_APPROVERS + ["MASTER"]
 
@@ -445,16 +445,14 @@ with main_container.container():
         
         if st.session_state['show_attend_form']:
             with st.container(border=True):
-                date_mode = st.radio("기간 설정", ["반차/외출/병가 (단일)", "기간 (연차/휴가)"], horizontal=True)
+                date_mode = st.radio("기간 설정", ["하루/반차/외출 (단일)", "기간 (연차/휴가)"], horizontal=True)
                 final_date_str = ""
-                if date_mode == "반차/외출/병가 (단일)":
+                if date_mode == "하루/반차/외출 (단일)":
                     st.write("**📆 일시 및 시간 선택 (단일)**")
                     dc1, dc2, dc3 = st.columns(3)
                     d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
                     
-                    # [수정] 시작 시간 08:00로 변경
                     t_start = dc2.time_input("시작 시간", value=time(8,0))
-                    # [수정] 종료 시간 17:00로 변경
                     t_end = dc3.time_input("종료 시간", value=time(17,0)) 
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
                 else:
@@ -463,12 +461,10 @@ with main_container.container():
                     with dc1:
                         st.caption("시작 일시")
                         d_start = st.date_input("시작일", value=datetime.now(KST))
-                        # [수정] 시작 시간 08:00로 변경
                         t_start = st.time_input("시작 시간", value=time(8,0))
                     with dc2:
                         st.caption("종료 일시")
                         d_end = st.date_input("종료일", value=datetime.now(KST))
-                        # [수정] 종료 시간 17:00로 변경
                         t_end = st.time_input("종료 시간", value=time(17,0))
                     if d_start > d_end: st.error("⚠️ 종료일이 시작일보다 빠릅니다.")
                     else: final_date_str = f"{d_start} {t_start.strftime('%H:%M')} ~ {d_end} {t_end.strftime('%H:%M')}"
