@@ -3,7 +3,7 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
-# [유지] 캘린더 충돌 방지용 임포트
+# [유지] 충돌 방지용 모듈명 변경
 from datetime import time as dt_time 
 import time as tm 
 import uuid
@@ -36,47 +36,53 @@ COMPANIES = {
     "0645": "울산 제이유"
 }
 
-# --- [스타일] CSS (깨진 글씨 강제 삭제 및 아이콘 대체) ---
+# --- [스타일] CSS (상하단 삭제 + 깨진 글씨 강력 숨김) ---
 st.markdown("""
 <style>
-    /* [1] 모바일 화면 최적화 */
+    /* [1] 상단 헤더 및 하단 푸터 완전 삭제 (Nuclear Option) */
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
+    footer {
+        display: none !important;
+    }
+    
+    /* [2] 모바일 전용 스타일 */
     @media only screen and (max-width: 768px) {
+        /* 상단 여백 최소화 (헤더가 없으므로 더 올림) */
         .block-container {
-            padding-top: 1rem !important;
+            padding-top: 0rem !important;
             padding-left: 0.5rem !important;
             padding-right: 0.5rem !important;
         }
         
-        /* [핵심] 사이드바 토글 버튼의 '깨진 텍스트' 강제 숨김 */
+        /* [핵심] 사이드바 토글 버튼의 '원래 내용(깨진 글씨)' 숨기기 */
+        /* visibility: hidden은 공간은 차지하되 눈에만 안 보임 */
         [data-testid="stSidebarCollapsedControl"] {
-            font-size: 0px !important;
-            color: transparent !important;
+            visibility: hidden !important;
+            width: 50px !important; 
+            height: 50px !important;
         }
         
-        /* 숨긴 자리에 '☰' 아이콘 강제 삽입 (깨지지 않는 텍스트 기호 사용) */
+        /* [핵심] 숨겨진 버튼 위에 '☰' 아이콘만 보이게 설정 */
         [data-testid="stSidebarCollapsedControl"]::after {
             content: "☰"; 
-            font-size: 28px !important;
+            visibility: visible !important; /* 이것만 보임 */
+            display: block !important;
+            font-size: 30px !important;
             color: #000000 !important;
             font-weight: bold;
             position: absolute;
-            top: 0px;
-            left: 0px;
-            visibility: visible !important;
-        }
-
-        /* [핵심] 드롭다운(Selectbox) 화살표 텍스트 숨김 */
-        /* 드롭다운 내의 아이콘 컨테이너를 숨겨버림 */
-        div[data-baseweb="select"] > div:nth-child(2) {
-            visibility: hidden !important;
-            width: 0px !important;
+            top: 5px;
+            left: 5px;
+            z-index: 9999;
         }
 
         /* 제목 글자 크기 최적화 */
-        h2 { font-size: 1.3rem !important; }
+        h2 { font-size: 1.3rem !important; margin-top: 10px !important; }
     }
 
-    /* [2] 버튼 디자인 */
+    /* [3] 버튼 디자인 */
     div.stButton > button {
         width: 100%;
         background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
@@ -87,7 +93,7 @@ st.markdown("""
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
 
-    /* [3] 캘린더 스타일 */
+    /* [4] 캘린더 스타일 */
     .fc { background: white !important; border-radius: 10px; padding: 5px; }
     .fc-daygrid-day-number, .fc-col-header-cell-cushion {
         color: #000000 !important; 
@@ -97,7 +103,7 @@ st.markdown("""
     .fc-day-sun .fc-daygrid-day-number, .fc-day-sun .fc-col-header-cell-cushion { color: #FF4B4B !important; }
     .fc-day-sat .fc-daygrid-day-number, .fc-day-sat .fc-col-header-cell-cushion { color: #1E90FF !important; }
     
-    /* [4] 입력창 스타일 */
+    /* [5] 입력창 스타일 */
     .stTextInput input, .stSelectbox div, .stDateInput input, .stTimeInput input {
         border-radius: 8px !important;
     }
@@ -242,7 +248,8 @@ if 'company_name' not in st.session_state:
 # ==========================================
 COMPANY = st.session_state['company_name']
 
-st.sidebar.title(f"📍 {COMPANY}")
+# [수정] 사이드바 타이틀은 유지하되 텍스트만 보이게
+st.sidebar.markdown(f"### 📍 {COMPANY}")
 if st.sidebar.button("로그아웃"):
     del st.session_state['company_name']
     if 'logged_in_manager' in st.session_state: del st.session_state['logged_in_manager']
@@ -288,7 +295,7 @@ with main_container.container():
                     private = st.checkbox("🔒 비공개")
                     if st.form_submit_button("등록"):
                         save_suggestion(COMPANY, title, content, author, private, pw)
-                        st.success("✅ 제안 내용이 안전하게 등록되었습니다.")
+                        st.success("✅ 등록되었습니다.")
                         tm.sleep(1.2)
                         st.session_state['show_sugg_form']=False; st.rerun()
         st.divider()
@@ -500,6 +507,7 @@ with main_container.container():
             m_tab1, m_tab2, m_tab3 = st.tabs(["✅ 결재 관리", "📢 공지/일정", "📊 통계"])
             with m_tab1:
                 df = load_data("근태신청", COMPANY)
+                # [수정] KeyError 방지 컬럼 확인
                 if not df.empty and '상태' in df.columns and '승인담당자' in df.columns:
                     pend = pd.DataFrame()
                     if manager_id == "MASTER":
