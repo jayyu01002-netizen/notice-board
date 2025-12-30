@@ -27,21 +27,18 @@ KST = pytz.timezone('Asia/Seoul')
 # =========================================================
 st.markdown("""
 <style>
-    /* [1] 제목(h1) 모바일 최적화 */
+    /* (스타일 CSS는 기존과 동일하여 생략 없이 유지) */
     h1 { padding-top: 1rem !important; font-size: 2rem !important; }
     @media (max-width: 640px) {
         h1 { font-size: 1.5rem !important; margin-top: 0.5rem !important; }
         .block-container { padding-top: 2rem !important; }
     }
-
-    /* [2] 상단 불필요 요소 숨김 */
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
     div[data-testid="stExpander"] summary span,
     div[data-testid="stExpander"] summary svg { display: none !important; }
     div[data-testid="stExpander"] summary { padding-left: 10px !important; }
 
-    /* [3] 커스텀 네비게이션 (라디오 버튼을 탭처럼 꾸미기) */
     div.row-widget.stRadio > div {
         flex-direction: row;
         justify-content: center;
@@ -49,7 +46,7 @@ st.markdown("""
         background: #f0f2f6;
         padding: 5px;
         border-radius: 10px;
-        overflow-x: auto; /* 모바일에서 가로 스크롤 허용 */
+        overflow-x: auto;
         flex-wrap: nowrap;
     }
     div.row-widget.stRadio > div > label {
@@ -63,20 +60,16 @@ st.markdown("""
         font-weight: bold;
         transition: all 0.2s;
         text-align: center;
-        white-space: nowrap; /* 줄바꿈 방지 */
+        white-space: nowrap;
     }
-    /* 선택된 탭 스타일 */
     div.row-widget.stRadio > div > label[data-checked="true"] {
         background: white !important;
         color: #4b6cb7 !important;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    /* 라디오 버튼 원형 숨김 */
     div.row-widget.stRadio div[role="radiogroup"] > label > div:first-child {
         display: none !important;
     }
-
-    /* [4] 일반 버튼 (새로고침 등) -> 검정색, 작게 */
     div.stButton > button {
         width: auto !important;
         padding: 0.3rem 0.7rem !important;
@@ -92,8 +85,6 @@ st.markdown("""
         background: #000000 !important;
         color: #ffffff !important;
     }
-
-    /* [5] 폼 내부 버튼 (신청/등록) -> 기존 스타일 유지 (크고 초록색) */
     div[data-testid="stForm"] div.stButton > button {
         width: 100% !important;
         padding: 0.5rem 1rem !important;
@@ -102,23 +93,15 @@ st.markdown("""
         color: white !important;
         border: none !important;
     }
-
-    /* [6] 로그아웃 버튼 -> 빨간색 */
     div[data-testid="column"] button[kind="secondary"] {
         background: #FF4B4B !important;
         color: white !important;
         border: none !important;
     }
-
-    /* [7] 입력창 디자인 */
     .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
         border-radius: 8px;
     }
-    
-    /* [8] 달력 높이 */
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
-    
-    /* [9] 본문 폰트 */
     p { font-size: 16px; word-break: keep-all; }
 </style>
 """, unsafe_allow_html=True)
@@ -126,10 +109,15 @@ st.markdown("""
 # =========================================================
 # [설정] 관리자 및 회사 정보
 # =========================================================
-FOREMEN = ["JK 조장", "JX 메인 조장", "JX 어퍼 조장", "MX5 조장", "피더 조장"]
-MIDDLE_MANAGERS = ["반장"]
-APPROVER_OPTIONS = FOREMEN + MIDDLE_MANAGERS
-ALL_MANAGERS = FOREMEN + MIDDLE_MANAGERS + ["MASTER"]
+# 장안용 승인자
+JANGAN_FOREMEN = ["JK 조장", "JX 메인 조장", "JX 어퍼 조장", "MX5 조장", "피더 조장"]
+JANGAN_MID = ["반장"]
+
+# [수정] 울산용 승인자 정의
+ULSAN_APPROVERS = ["김대환", "김범진", "홍승곤"]
+
+# 관리자 로그인 목록 병합 (모두가 로그인 가능해야 함)
+ALL_MANAGERS = JANGAN_FOREMEN + JANGAN_MID + ULSAN_APPROVERS + ["MASTER"]
 
 COMPANIES = {
     "9424": "장안 제이유",
@@ -207,9 +195,18 @@ def save_suggestion(company, title, content, author, is_private, password):
     sheet.append_row([company, get_today(), title, content, author, "TRUE" if is_private else "FALSE", str(password)])
     st.cache_data.clear()
 
+# [수정] save_attendance 함수: 회사별 분기 처리
 def save_attendance(company, name, type_val, date_range_str, reason, password, approver):
     sheet = get_worksheet("근태신청")
-    initial_status = "1차승인대기" if approver in FOREMEN else "2차승인대기"
+    
+    if company == "장안 제이유":
+        # [장안] 기존 복잡한 로직 유지
+        initial_status = "1차승인대기" if approver in JANGAN_FOREMEN else "2차승인대기"
+    else:
+        # [울산] 단순화된 로직 (중간 단계 없음)
+        # 선택된 승인자에게 바로 '승인대기' 상태로 전달
+        initial_status = "승인대기" 
+
     sheet.append_row([company, get_today(), name, type_val, date_range_str, reason, initial_status, str(password), approver])
     st.cache_data.clear()
 
@@ -284,18 +281,17 @@ with main_container.container():
     def toggle_attend(): st.session_state['show_attend_form'] = not st.session_state['show_attend_form']
 
     # ------------------------------------------------------------------
-    # [네비게이션] 탭 튕김 방지를 위해 'st.tabs' 대신 'st.radio'를 탭처럼 사용
+    # [네비게이션]
     # ------------------------------------------------------------------
     tabs = ["📋 공지", "🗣️ 제안", "📆 근무표", "📅 근태신청", "⚙️ 관리자"]
     selected_tab = st.radio("메뉴 선택", tabs, horizontal=True, label_visibility="collapsed")
     
-    st.write("") # 탭과 본문 사이 약간의 간격
+    st.write("")
 
     # ----------------------------------
     # 1. 공지사항
     # ----------------------------------
     if selected_tab == "📋 공지":
-        # [수정] 새로고침 버튼 우측 끝 배치
         c_space, c_btn = st.columns([0.85, 0.15])
         with c_btn:
             if st.button("🔄 새로고침", key="re_1"): 
@@ -358,17 +354,15 @@ with main_container.container():
     # 3. 근무표
     # ----------------------------------
     elif selected_tab == "📆 근무표":
-        # [수정] 새로고침 버튼을 보기(목록/달력) 버튼 바로 왼쪽으로 배치
         c_space, c_btn, c_view = st.columns([0.6, 0.15, 0.25])
         with c_space:
-            st.write("") # 여백 확보
+            st.write("")
         with c_btn:
             if st.button("🔄 새로고침", key="cal_ref"): 
                 st.cache_data.clear()
                 st.session_state['calendar_key'] = str(uuid.uuid4())
                 st.rerun()
         with c_view:
-            # 라디오 버튼 변경 시에도 상단 탭(근무표)은 유지됨
             view_type = st.radio("보기", ["달력", "목록"], horizontal=True, label_visibility="collapsed")
 
         events = []
@@ -425,12 +419,10 @@ with main_container.container():
                 .fc-day-sat .fc-col-header-cell-cushion { color: #1E90FF !important; }
             """
             cal = calendar(events=events, options={"initialView": "dayGridMonth", "height": 750}, key=st.session_state['calendar_key'], custom_css=calendar_css)
-            
             if cal.get("callback") == "eventClick":
                 evt = cal["eventClick"]["event"]
                 props = evt.get("extendedProps", {})
                 st.info(f"📌 {evt['title']}")
-                
                 if props.get("type") == "leave":
                     name = props.get("name")
                     user_df = approved_df[approved_df['이름'] == name]
@@ -488,7 +480,14 @@ with main_container.container():
                     name = c1.text_input("이름")
                     pw = c2.text_input("비밀번호(본인확인용)", type="password")
                     type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근"])
-                    approver = st.selectbox("승인 요청 대상", APPROVER_OPTIONS)
+                    
+                    # [수정] 회사별 승인권자 목록 분기 표시
+                    if COMPANY == "장안 제이유":
+                        approver_options = JANGAN_FOREMEN + JANGAN_MID
+                    else:
+                        approver_options = ULSAN_APPROVERS # 김대환, 김범진, 홍승곤
+                    
+                    approver = st.selectbox("승인 요청 대상", approver_options)
                     reason = st.text_input("사유")
                     if st.form_submit_button("신청하기"):
                         if not name or not pw: st.error("정보를 입력해주세요.")
@@ -515,7 +514,7 @@ with main_container.container():
     # 5. 관리자
     # ----------------------------------
     elif selected_tab == "⚙️ 관리자":
-        st.subheader("⚙️ 관리자 및 조장/반장 전용")
+        st.subheader("⚙️ 관리자 전용")
         if 'logged_in_manager' not in st.session_state:
             user_db = load_user_db()
             selected_name = st.selectbox("관리자 선택", ["선택안함"] + ALL_MANAGERS)
@@ -551,7 +550,6 @@ with main_container.container():
             manager_id = st.session_state['logged_in_manager']
             manager_name = manager_id
             
-            # 로그아웃 버튼 (작고 빨갛게, 우측)
             c_info, c_logout = st.columns([0.8, 0.2])
             with c_info:
                 st.success(f"👋 접속중: {manager_name}")
@@ -571,21 +569,33 @@ with main_container.container():
                                 del user_db[target]; save_user_db(user_db)
                                 st.success("초기화 완료"); tm.sleep(1); st.rerun()
 
-            # 관리자 내부 탭은 기존 st.tabs 유지 (여기서는 튕김 문제가 덜 발생하며 로직상 분리 필요)
             m_tab1, m_tab2, m_tab3 = st.tabs(["✅ 결재", "📢 공지/일정", "📊 통계"])
             with m_tab1:
                 df = load_data("근태신청", COMPANY)
                 if not df.empty and '상태' in df.columns:
                     pend = pd.DataFrame()
-                    if manager_id == "MASTER":
-                        pend = df[df['상태'] == '최종승인대기']
-                        st.info("📢 최종 승인 대기")
-                    elif manager_id == "반장":
-                        pend = df[df['상태'] == '2차승인대기']
-                        st.info("📢 반장 승인 대기")
+                    
+                    # [수정] 대기 리스트 조회 로직 분기
+                    if COMPANY == "장안 제이유":
+                        # [장안] 기존 로직
+                        if manager_id == "MASTER":
+                            pend = df[df['상태'] == '최종승인대기']
+                            st.info("📢 최종 승인 대기")
+                        elif manager_id == "반장":
+                            pend = df[df['상태'] == '2차승인대기']
+                            st.info("📢 반장 승인 대기")
+                        else:
+                            pend = df[(df['상태'] == '1차승인대기') & (df['승인담당자'] == manager_name)]
+                            st.info("📢 조장 승인 대기")
                     else:
-                        pend = df[(df['상태'] == '1차승인대기') & (df['승인담당자'] == manager_name)]
-                        st.info("📢 조장 승인 대기")
+                        # [울산] 단순 로직 (승인대기 상태인것들)
+                        # 마스터는 모든 대기건 볼 수 있고, 승인자는 본인에게 온 것만 봄
+                        if manager_id == "MASTER":
+                            pend = df[df['상태'] == '승인대기']
+                            st.info("📢 전체 승인 대기 (Master 권한)")
+                        elif manager_id in ULSAN_APPROVERS:
+                            pend = df[(df['상태'] == '승인대기') & (df['승인담당자'] == manager_name)]
+                            st.info(f"📢 {manager_name}님 승인 대기")
 
                     if pend.empty: st.info("대기중인 건이 없습니다.")
                     else:
@@ -593,14 +603,24 @@ with main_container.container():
                             with st.expander(f"[{r['이름']}] {r['구분']} - {r['날짜및시간']}"):
                                 st.write(f"사유: {r['사유']}")
                                 c_app, c_rej = st.columns(2)
+                                
+                                # [수정] 승인 처리 로직 분기
                                 if c_app.button("승인", key=f"app_{i}"):
-                                    if manager_id == "MASTER": 
+                                    if COMPANY == "장안 제이유":
+                                        # [장안] 단계별 승인
+                                        if manager_id == "MASTER": 
+                                            update_attendance_step("근태신청", i, "최종승인")
+                                        elif manager_id == "반장": 
+                                            update_attendance_step("근태신청", i, "최종승인대기", "MASTER")
+                                        else: 
+                                            update_attendance_step("근태신청", i, "2차승인대기", "반장")
+                                    else:
+                                        # [울산] 즉시 최종 승인 (중간단계 없음)
+                                        # 마스터든 지정 승인자든 누르면 바로 최종승인
                                         update_attendance_step("근태신청", i, "최종승인")
-                                    elif manager_id == "반장": 
-                                        update_attendance_step("근태신청", i, "최종승인대기", "MASTER")
-                                    else: 
-                                        update_attendance_step("근태신청", i, "2차승인대기", "반장")
+
                                     st.success("승인됨"); tm.sleep(1); st.rerun()
+                                    
                                 if c_rej.button("반려", key=f"rej_{i}"):
                                     update_attendance_step("근태신청", i, "반려")
                                     st.error("반려됨"); tm.sleep(1); st.rerun()
