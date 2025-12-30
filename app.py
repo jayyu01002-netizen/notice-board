@@ -2,14 +2,16 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
+# [핵심 수정 1] time 객체와 time 모듈의 이름을 명확히 분리 (충돌 원천 차단)
+from datetime import time as dt_time 
+import time as tm 
 import uuid
 import pytz
 import holidays
 from streamlit_calendar import calendar
 import json
 import os
-import time as tm # [핵심 수정 1] 'time' 모듈 이름 충돌 방지 (이게 캘린더 먹통 주범)
 
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
@@ -34,39 +36,39 @@ COMPANIES = {
     "0645": "울산 제이유"
 }
 
-# --- [스타일] CSS (모바일 글씨 깨짐 강력 제거) ---
+# --- [스타일] CSS (모바일 글씨 삭제 + 캘린더 복구) ---
 st.markdown("""
 <style>
-    /* [1] 모바일 전용 스타일 (스마트폰 화면) */
+    /* [1] 모바일 전용 스타일 */
     @media only screen and (max-width: 768px) {
-        /* 상단 여백 제거 */
         .block-container {
             padding-top: 1rem !important;
             padding-left: 0.5rem !important;
             padding-right: 0.5rem !important;
         }
         
-        /* [핵심 수정 2] 깨지는 화살표 텍스트 강제 삭제 (font-size: 0) */
-        button[kind="header"] {
-            font-size: 0px !important; /* 글씨 크기 0으로 만들어서 숨김 */
-            width: 40px !important;
-        }
-        [data-testid="stSidebarCollapsedControl"] {
-            font-size: 0px !important; /* 글씨 크기 0으로 만들어서 숨김 */
+        /* [핵심 수정 2] 깨지는 화살표 텍스트(keyboard_double...) 물리적 삭제 */
+        /* 글자 크기를 0으로 만들어 공간 자체를 없앰 */
+        button[kind="header"], [data-testid="stSidebarCollapsedControl"] {
+            font-size: 0px !important; 
+            color: transparent !important;
+            width: 50px !important;
+            height: 50px !important;
         }
         
-        /* 투명해진 버튼 위에 햄버거 아이콘(☰) 강제 삽입 */
+        /* 삭제된 자리에 햄버거 아이콘(☰) 강제 생성 */
         [data-testid="stSidebarCollapsedControl"]::after {
             content: "☰";
             color: #333333;
-            font-size: 24px !important; /* 아이콘 크기는 키움 */
+            font-size: 28px !important; /* 아이콘은 크게 */
             font-weight: bold;
             position: absolute;
-            left: 0px;
-            top: 5px;
+            top: 10px;
+            left: 10px;
+            display: block !important;
         }
 
-        /* 제목 글자 크기 최적화 */
+        /* 제목 최적화 */
         h2 { font-size: 1.3rem !important; }
     }
 
@@ -83,16 +85,12 @@ st.markdown("""
 
     /* [3] 캘린더 글씨 색상 (평일 검정 / 주말 색상) */
     .fc { background: white !important; border-radius: 10px; padding: 5px; }
-    
-    /* 날짜 숫자 및 요일: 무조건 검정색으로 잘 보이게 */
     .fc-daygrid-day-number, .fc-col-header-cell-cushion {
         color: #000000 !important; 
         font-weight: bold !important; 
         text-decoration: none !important; 
     }
-    /* 일요일 빨강 */
     .fc-day-sun .fc-daygrid-day-number, .fc-day-sun .fc-col-header-cell-cushion { color: #FF4B4B !important; }
-    /* 토요일 파랑 */
     .fc-day-sat .fc-daygrid-day-number, .fc-day-sat .fc-col-header-cell-cushion { color: #1E90FF !important; }
     
     /* [4] 입력창 둥글게 */
@@ -172,7 +170,6 @@ def save_suggestion(company, title, content, author, is_private, password):
 def save_attendance(company, name, type_val, date_range_str, reason, password, approver):
     sheet = get_worksheet("근태신청")
     initial_status = "1차승인대기" if approver in FOREMEN else "2차승인대기"
-    # [확인] 승인담당자 컬럼에 저장
     sheet.append_row([company, get_korea_time(), name, type_val, date_range_str, reason, initial_status, str(password), approver])
     st.cache_data.clear()
 
@@ -359,7 +356,7 @@ with main_container.container():
                 except: pass
 
         if view_type == "달력":
-            # [평일 검정 / 주말 색상]
+            # [수정] 캘린더 글씨 색상 검정 강제
             calendar_css = """
                 .fc { background: white !important; border-radius: 10px; padding: 5px; }
                 .fc-daygrid-day-number, .fc-col-header-cell-cushion { color: #000000 !important; text-decoration: none !important; }
@@ -386,7 +383,7 @@ with main_container.container():
         else:
             st.dataframe(pd.DataFrame(events))
 
-    # 4. 근태신청 (수정: tm 모듈 사용으로 에러 해결)
+    # 4. 근태신청 (수정: time -> dt_time 사용)
     with tab4:
         st.write("### 📅 연차/근태 신청")
         if st.button("📝 신청서 작성", on_click=toggle_attend): pass
@@ -398,9 +395,9 @@ with main_container.container():
                     st.write("**📆 일시 및 시간 선택 (단일)**")
                     dc1, dc2, dc3 = st.columns(3)
                     d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
-                    # [수정] time(9,0) -> datetime.time(9,0)이므로 충돌 없음
-                    t_start = dc2.time_input("시작 시간", value=time(9,0))
-                    t_end = dc3.time_input("종료 시간", value=time(18,0))
+                    # [핵심] dt_time(9,0) 사용 -> 에러 해결
+                    t_start = dc2.time_input("시작 시간", value=dt_time(9,0))
+                    t_end = dc3.time_input("종료 시간", value=dt_time(18,0))
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
                 else:
                     st.write("**📆 기간 및 시간 선택 (연차/휴가)**")
@@ -408,11 +405,11 @@ with main_container.container():
                     with dc1:
                         st.caption("시작 일시")
                         d_start = st.date_input("시작일", value=datetime.now(KST))
-                        t_start = st.time_input("시작 시간", value=time(9,0))
+                        t_start = st.time_input("시작 시간", value=dt_time(9,0))
                     with dc2:
                         st.caption("종료 일시")
                         d_end = st.date_input("종료일", value=datetime.now(KST))
-                        t_end = st.time_input("종료 시간", value=time(18,0))
+                        t_end = st.time_input("종료 시간", value=dt_time(18,0))
                     if d_start > d_end: st.error("⚠️ 종료일이 시작일보다 빠릅니다.")
                     else: final_date_str = f"{d_start} {t_start.strftime('%H:%M')} ~ {d_end} {t_end.strftime('%H:%M')}"
                 st.info(f"선택된 일시: {final_date_str}")
