@@ -23,151 +23,111 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 모바일 최적화 & 모던 UI 디자인 리뉴얼
+# [스타일] CSS: 목록 안보임 해결 & 버튼 줄바꿈 방지 & 드롭다운 분리
 # =========================================================
 st.markdown("""
 <style>
-    /* [1] 전체 배경 및 폰트 설정 */
-    .stApp {
-        background-color: #f8f9fa; /* 아주 연한 회색 배경 */
-        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+    /* [1] 제목(h1) 모바일 최적화 */
+    h1 { padding-top: 1rem !important; font-size: 2rem !important; }
+    @media (max-width: 640px) {
+        h1 { font-size: 1.5rem !important; margin-top: 0.5rem !important; }
+        .block-container { padding-top: 2rem !important; }
     }
 
-    /* [2] 모바일 상단 잘림 해결 (핵심 수정) */
-    .block-container {
-        padding-top: 4rem !important; /* 상단 여백을 넉넉하게 확보 */
-        padding-bottom: 5rem !important;
-        max-width: 800px;
-    }
-    
-    /* 제목 스타일 */
-    h1 {
-        color: #1f2937;
-        font-weight: 800 !important;
-        font-size: 1.8rem !important;
-        margin-bottom: 0.5rem !important;
-    }
-    h2, h3 { color: #374151; font-weight: 700 !important; }
-
-    /* [3] 상단 불필요 요소 숨김 */
+    /* [2] 상단 불필요 요소 숨김 */
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
     
-    /* [4] 커스텀 네비게이션 (탭 메뉴 스타일 업그레이드) */
+    /* [중요] Expander(목록) 글씨 숨김 코드 삭제됨 -> 이제 목록 잘 보입니다 */
+    
+    /* [3] 커스텀 네비게이션 (라디오 버튼) */
     div.row-widget.stRadio > div {
-        background: #ffffff;
+        flex-direction: row;
+        justify-content: center;
+        gap: 5px;
+        background: #f0f2f6;
         padding: 5px;
-        border-radius: 15px;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-        border: 1px solid #e5e7eb;
-        justify-content: space-between; /* 간격 균등 배치 */
+        border-radius: 10px;
         overflow-x: auto;
         flex-wrap: nowrap;
     }
     div.row-widget.stRadio > div > label {
         background: transparent;
-        border-radius: 10px;
-        padding: 8px 10px;
-        margin: 0 2px !important;
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin: 0 !important;
         width: auto !important;
         border: none;
         cursor: pointer;
-        font-weight: 600;
-        color: #6b7280;
+        font-weight: bold;
         transition: all 0.2s;
         text-align: center;
         white-space: nowrap;
-        font-size: 14px;
     }
-    /* 선택된 탭 강조 */
     div.row-widget.stRadio > div > label[data-checked="true"] {
-        background: #3b82f6 !important; /* 세련된 파란색 */
-        color: white !important;
-        box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+        background: white !important;
+        color: #4b6cb7 !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     div.row-widget.stRadio div[role="radiogroup"] > label > div:first-child {
         display: none !important;
     }
 
-    /* [5] 카드형 컨테이너 디자인 (내용을 감싸는 박스) */
-    div[data-testid="stVerticalBlock"] > div[data-testid="stVerticalBlock"] {
-        /* gap: 1rem; */
-    }
-    
-    /* Expander 디자인 (목록 등) */
-    div[data-testid="stExpander"] {
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        overflow: hidden;
-    }
-    div[data-testid="stExpander"] summary {
-        font-weight: 600;
-        color: #374151;
-        padding: 1rem !important;
-    }
-    
-    /* [6] 버튼 디자인 (플랫하고 깔끔하게) */
+    /* [4] 일반 버튼 (새로고침 등) -> 줄바꿈 절대 방지 */
     div.stButton > button {
-        width: 100% !important;
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        border: none !important;
-        padding: 0.5rem 1rem !important;
-        transition: transform 0.1s;
-        white-space: nowrap !important; /* 줄바꿈 방지 */
-    }
-    
-    /* 기본 버튼 (회색 - 새로고침 등) */
-    div.stButton > button {
-        background-color: #f3f4f6 !important;
-        color: #374151 !important;
-        border: 1px solid #d1d5db !important;
+        width: 100% !important;        
+        padding: 0.3rem 0.5rem !important;
+        font-size: 13px !important;
+        border-radius: 6px !important;
+        background: #2b2b2b !important;
+        color: #eeeeee !important;
+        border: 1px solid #444444 !important;
+        box-shadow: none !important;
+        margin-top: 5px !important;
+        white-space: nowrap !important;  /* [핵심] 글자 줄바꿈 금지 */
     }
     div.stButton > button:hover {
-        background-color: #e5e7eb !important;
-        color: #111827 !important;
+        background: #000000 !important;
+        color: #ffffff !important;
     }
 
-    /* 폼 제출 버튼 (파란색 강조) */
+    /* [5] 폼 내부 버튼 (신청/등록) */
     div[data-testid="stForm"] div.stButton > button {
-        background: #3b82f6 !important;
+        width: 100% !important;
+        padding: 0.5rem 1rem !important;
+        font-size: 16px !important;
+        background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%) !important;
         color: white !important;
         border: none !important;
     }
-    div[data-testid="stForm"] div.stButton > button:hover {
-        background: #2563eb !important;
-    }
 
-    /* 로그아웃/삭제 버튼 (빨간색) */
+    /* [6] 로그아웃 버튼 -> 빨간색 */
     div[data-testid="column"] button[kind="secondary"] {
-        background: #ef4444 !important;
+        background: #FF4B4B !important;
         color: white !important;
         border: none !important;
+        white-space: nowrap !important;
     }
 
-    /* [7] 입력창 디자인 (둥글고 부드럽게) */
+    /* [7] 입력창 디자인 */
     .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
         border-radius: 8px;
-        border: 1px solid #d1d5db;
-        background-color: white;
     }
-    
-    /* [8] 중요 공지 등 텍스트 */
-    p { font-size: 15px; line-height: 1.6; word-break: keep-all; color: #4b5563; }
-    
-    /* 달력 높이 */
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
+    p { font-size: 16px; word-break: keep-all; }
 </style>
 """, unsafe_allow_html=True)
 
 # =========================================================
 # [설정] 관리자 및 회사 정보
 # =========================================================
+# 1. 장안 제이유 관리자 목록
 JANGAN_FOREMEN = ["JK 조장", "JX 메인 조장", "JX 어퍼 조장", "MX5 조장", "피더 조장"]
 JANGAN_MID = ["반장"]
+
+# 2. 울산 제이유 관리자 목록
 ULSAN_APPROVERS = ["김대환", "김범진", "홍성곤"]
+
 ALL_MANAGERS = JANGAN_FOREMEN + JANGAN_MID + ULSAN_APPROVERS + ["MASTER"]
 
 COMPANIES = {
@@ -300,19 +260,17 @@ def calculate_leave_usage(date_str, leave_type):
 # ==========================================
 if 'company_name' not in st.session_state:
     with main_container.container():
-        st.markdown("<br><br>", unsafe_allow_html=True) # 상단 여백
-        st.title("🏢 제이유 그룹")
-        with st.container(border=True):
-            st.write("접속하려는 회사의 코드를 입력해주세요.")
-            with st.form("login_form"):
-                pw_input = st.text_input("회사 접속 코드", type="password")
-                if st.form_submit_button("로그인"):
-                    if pw_input in COMPANIES:
-                        st.session_state['company_name'] = COMPANIES[pw_input]
-                        st.session_state['calendar_key'] = str(uuid.uuid4())
-                        st.rerun()
-                    else:
-                        st.error("잘못된 접속 코드입니다.")
+        st.title("🏢 제이유 그룹 인트라넷")
+        st.write("접속하려는 회사의 코드를 입력해주세요.")
+        with st.form("login_form"):
+            pw_input = st.text_input("회사 접속 코드", type="password")
+            if st.form_submit_button("로그인"):
+                if pw_input in COMPANIES:
+                    st.session_state['company_name'] = COMPANIES[pw_input]
+                    st.session_state['calendar_key'] = str(uuid.uuid4())
+                    st.rerun()
+                else:
+                    st.error("잘못된 접속 코드입니다.")
     st.stop()
 
 # ==========================================
@@ -329,7 +287,7 @@ with main_container.container():
     def toggle_sugg(): st.session_state['show_sugg_form'] = not st.session_state['show_sugg_form']
     def toggle_attend(): st.session_state['show_attend_form'] = not st.session_state['show_attend_form']
 
-    tabs = ["📋 공지", "🗣️ 제안", "📆 근무표", "📅 신청", "⚙️ 관리자"]
+    tabs = ["📋 공지", "🗣️ 제안", "📆 근무표", "📅 근태신청", "⚙️ 관리자"]
     selected_tab = st.radio("메뉴 선택", tabs, horizontal=True, label_visibility="collapsed")
     
     st.write("")
@@ -343,8 +301,7 @@ with main_container.container():
                 st.rerun()
         
         df = load_data("공지사항", COMPANY)
-        if df.empty: 
-            with st.container(border=True): st.info("등록된 공지사항이 없습니다.")
+        if df.empty: st.info("등록된 공지사항이 없습니다.")
         else:
             for idx, row in df.iloc[::-1].iterrows():
                 is_imp = str(row.get("중요", "FALSE")).upper() == "TRUE"
@@ -352,7 +309,7 @@ with main_container.container():
                     if is_imp: st.markdown(f":red[**[중요] 🔥 {row['제목']}**]")
                     else: st.subheader(f"📌 {row['제목']}")
                     st.caption(f"📅 {row['작성일']}")
-                    st.write(f"{row['내용']}")
+                    st.markdown(f"{row['내용']}")
 
     # 2. 제안
     elif selected_tab == "🗣️ 제안":
@@ -360,7 +317,6 @@ with main_container.container():
         
         if st.session_state['show_sugg_form']:
             with st.container(border=True):
-                st.write("**📝 제안 작성**")
                 with st.form("sugg_form", clear_on_submit=True):
                     c1, c2 = st.columns(2)
                     author = c1.text_input("작성자")
@@ -374,7 +330,7 @@ with main_container.container():
                         tm.sleep(1)
                         st.session_state['show_sugg_form'] = False; st.rerun()
         
-        st.write("")
+        st.divider()
         df_s = load_data("건의사항", COMPANY)
         if not df_s.empty:
             for idx, row in df_s.iloc[::-1].iterrows():
@@ -441,7 +397,7 @@ with main_container.container():
                             end_d = end_obj.strftime("%Y-%m-%d")
                         else: end_d = start_d
                     l_type = r['구분']
-                    col = "#3b82f6" if "연차" not in l_type else "#ef4444"
+                    col = "#D9534F" if "연차" in l_type else "#0275D8"
                     events.append({
                         "title": f"[{r['이름']}] {l_type}", 
                         "start": start_d, "end": end_d, "color": col,
@@ -451,11 +407,13 @@ with main_container.container():
 
         if view_type == "달력":
             calendar_css = """
-                .fc { background: white !important; border-radius: 10px; padding: 10px; }
+                .fc { background: white !important; }
                 .fc-daygrid-day-number { color: #333333 !important; text-decoration: none !important; }
                 .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; }
                 .fc-day-sun .fc-daygrid-day-number { color: #FF4B4B !important; }
                 .fc-day-sun .fc-col-header-cell-cushion { color: #FF4B4B !important; }
+                .fc-day-sat .fc-daygrid-day-number { color: #1E90FF !important; }
+                .fc-day-sat .fc-col-header-cell-cushion { color: #1E90FF !important; }
             """
             cal = calendar(events=events, options={"initialView": "dayGridMonth", "height": 750}, key=st.session_state['calendar_key'], custom_css=calendar_css)
             if cal.get("callback") == "eventClick":
@@ -478,37 +436,44 @@ with main_container.container():
             if filtered_events:
                 list_df = pd.DataFrame(filtered_events)
                 st.dataframe(list_df, column_config={"color": None, "extendedProps": None, "resourceId": None, "title": "내용", "start": "시작", "end": "종료"}, hide_index=True, use_container_width=True)
-            else: 
-                with st.container(border=True): st.info("등록된 일정이 없습니다.")
+            else: st.info("등록된 일정이 없습니다.")
 
     # 4. 근태신청
-    elif selected_tab == "📅 신청":
-        st.subheader("📅 연차/근태 신청")
+    elif selected_tab == "📅 근태신청":
+        st.write("### 📅 연차/근태 신청")
         if st.button("📝 신청서 작성", on_click=toggle_attend): pass
         
         if st.session_state['show_attend_form']:
             with st.container(border=True):
-                st.write("**📝 신청 내용 입력**")
                 date_mode = st.radio("기간 설정", ["하루/반차/외출 (단일)", "기간 (연차/휴가)"], horizontal=True)
                 final_date_str = ""
                 if date_mode == "하루/반차/외출 (단일)":
+                    st.write("**📆 일시 및 시간 선택 (단일)**")
                     dc1, dc2, dc3 = st.columns(3)
-                    d_sel = dc1.date_input("날짜", value=datetime.now(KST))
-                    t_start = dc2.time_input("시작", value=time(8,0))
-                    t_end = dc3.time_input("종료", value=time(17,0)) 
+                    d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
+                    
+                    # [수정] 시작 시간 08:00로 변경
+                    t_start = dc2.time_input("시작 시간", value=time(8,0))
+                    # [수정] 종료 시간 17:00로 변경
+                    t_end = dc3.time_input("종료 시간", value=time(17,0)) 
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
                 else:
+                    st.write("**📆 기간 및 시간 선택 (연차/휴가)**")
                     dc1, dc2 = st.columns(2)
                     with dc1:
+                        st.caption("시작 일시")
                         d_start = st.date_input("시작일", value=datetime.now(KST))
+                        # [수정] 시작 시간 08:00로 변경
                         t_start = st.time_input("시작 시간", value=time(8,0))
                     with dc2:
+                        st.caption("종료 일시")
                         d_end = st.date_input("종료일", value=datetime.now(KST))
+                        # [수정] 종료 시간 17:00로 변경
                         t_end = st.time_input("종료 시간", value=time(17,0))
                     if d_start > d_end: st.error("⚠️ 종료일이 시작일보다 빠릅니다.")
                     else: final_date_str = f"{d_start} {t_start.strftime('%H:%M')} ~ {d_end} {t_end.strftime('%H:%M')}"
                 
-                st.success(f"선택됨: {final_date_str}")
+                st.info(f"선택: {final_date_str}")
                 
                 with st.form("att_form"):
                     c1, c2 = st.columns(2)
@@ -516,6 +481,7 @@ with main_container.container():
                     pw = c2.text_input("비밀번호(본인확인용)", type="password")
                     type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근"])
                     
+                    # 회사별 승인자 분기 처리
                     if COMPANY == "장안 제이유":
                         approver_options = JANGAN_FOREMEN + JANGAN_MID
                     else:
@@ -531,59 +497,57 @@ with main_container.container():
                             tm.sleep(1.5)
                             st.session_state['show_attend_form']=False; st.rerun()
         st.divider()
-        with st.container(border=True):
-            st.write("🔎 **내 신청 내역 조회**")
-            with st.form("search"):
-                sc1, sc2 = st.columns(2)
-                s_name = sc1.text_input("이름")
-                s_pw = sc2.text_input("비밀번호", type="password")
-                if st.form_submit_button("조회"):
-                    df = load_data("근태신청", COMPANY)
-                    if not df.empty and '이름' in df.columns:
-                        my_df = df[(df['이름']==s_name) & (df['비밀번호']==s_pw)]
-                        if my_df.empty: st.error("내역 없음")
-                        else:
-                            for _, r in my_df.iterrows(): st.info(f"{r['날짜및시간']} | {r['구분']} | {r['상태']}")
-                    else: st.error("데이터가 없습니다.")
+        with st.form("search"):
+            sc1, sc2 = st.columns(2)
+            s_name = sc1.text_input("이름")
+            s_pw = sc2.text_input("비밀번호", type="password")
+            if st.form_submit_button("조회"):
+                df = load_data("근태신청", COMPANY)
+                if not df.empty and '이름' in df.columns:
+                    my_df = df[(df['이름']==s_name) & (df['비밀번호']==s_pw)]
+                    if my_df.empty: st.error("내역 없음")
+                    else:
+                        for _, r in my_df.iterrows(): st.info(f"{r['날짜및시간']} | {r['구분']} | {r['상태']}")
+                else: st.error("데이터가 없습니다.")
 
     # 5. 관리자
     elif selected_tab == "⚙️ 관리자":
         st.subheader("⚙️ 관리자 전용")
-        
-        # [관리자 로그인 섹션]
         if 'logged_in_manager' not in st.session_state:
-            with st.container(border=True):
-                user_db = load_user_db()
-                
-                if COMPANY == "장안 제이유":
-                    manager_options = ["선택안함"] + JANGAN_FOREMEN + JANGAN_MID + ["MASTER"]
-                else:
-                    manager_options = ["선택안함"] + ULSAN_APPROVERS + ["MASTER"]
+            user_db = load_user_db()
+            
+            # [핵심 수정] 관리자 목록 분기 처리 (회사별로 다른 목록 보여주기)
+            if COMPANY == "장안 제이유":
+                # 장안: 조장 + 반장 + MASTER
+                manager_options = ["선택안함"] + JANGAN_FOREMEN + JANGAN_MID + ["MASTER"]
+            else:
+                # 울산: 김대환, 김범진, 홍승곤 + MASTER
+                manager_options = ["선택안함"] + ULSAN_APPROVERS + ["MASTER"]
 
-                selected_name = st.selectbox("관리자 선택", manager_options)
-                
-                if selected_name != "선택안함":
-                    if selected_name not in user_db:
-                        st.warning(f"🔒 '{selected_name}' 초기 비밀번호 설정")
-                        with st.form("init_pw"):
-                            new_pw = st.text_input("새 비밀번호", type="password")
-                            chk_pw = st.text_input("확인", type="password")
-                            if st.form_submit_button("설정"):
-                                if new_pw == chk_pw and new_pw:
-                                    user_db[selected_name] = new_pw
-                                    save_user_db(user_db)
-                                    st.success("설정 완료!"); tm.sleep(1); st.rerun()
-                                else: st.error("비밀번호 불일치")
-                    else:
-                        with st.form("manager_login_form"):
-                            input_pw = st.text_input("비밀번호", type="password")
-                            if st.form_submit_button("로그인"):
-                                if str(input_pw) == str(user_db[selected_name]):
-                                    st.session_state['logged_in_manager'] = selected_name; st.rerun()
-                                else: st.error("비밀번호 오류")
+            selected_name = st.selectbox("관리자 선택", manager_options)
+            
+            if selected_name != "선택안함":
+                if selected_name not in user_db:
+                    st.warning(f"🔒 '{selected_name}' 초기 비밀번호 설정")
+                    with st.form("init_pw"):
+                        new_pw = st.text_input("새 비밀번호", type="password")
+                        chk_pw = st.text_input("확인", type="password")
+                        if st.form_submit_button("설정"):
+                            if new_pw == chk_pw and new_pw:
+                                user_db[selected_name] = new_pw
+                                save_user_db(user_db)
+                                st.success("설정 완료!"); tm.sleep(1); st.rerun()
+                            else: st.error("비밀번호 불일치")
+                else:
+                    with st.form("manager_login_form"):
+                        input_pw = st.text_input("비밀번호", type="password")
+                        if st.form_submit_button("로그인"):
+                            if str(input_pw) == str(user_db[selected_name]):
+                                st.session_state['logged_in_manager'] = selected_name; st.rerun()
+                            else: st.error("비밀번호 오류")
             
             st.write("")
-            with st.expander("🔐 시스템 최고 관리자 (Master)"):
+            if st.toggle("🔐 시스템 최고 관리자 (Master) 로그인"):
                 with st.form("master_login_form"):
                     master_pw = st.text_input("Master PW", type="password")
                     if st.form_submit_button("Master Login"):
@@ -591,10 +555,10 @@ with main_container.container():
                             st.session_state['logged_in_manager'] = "MASTER"; st.rerun()
                         else: st.error("비밀번호 오류")
         else:
-            # [관리자 로그인 성공 화면]
             manager_id = st.session_state['logged_in_manager']
             manager_name = manager_id
             
+            # 로그아웃 버튼 공간 확보
             c_info, c_logout = st.columns([0.75, 0.25])
             with c_info:
                 st.success(f"👋 접속중: {manager_name}")
@@ -603,7 +567,7 @@ with main_container.container():
                     del st.session_state['logged_in_manager']; st.rerun()
             
             if manager_id == "MASTER":
-                with st.expander("🔐 관리자 비밀번호 초기화"):
+                if st.toggle("🔐 관리자 비밀번호 초기화 (마스터 기능)"):
                     user_db = load_user_db()
                     registered_users = [u for u in user_db.keys() if u != "MASTER"]
                     if not registered_users: st.info("대상 없음")
@@ -634,15 +598,16 @@ with main_container.container():
                             pend = df[df['상태'] == '승인대기']
                             st.info("📢 전체 승인 대기 (Master 권한)")
                         elif manager_id in ULSAN_APPROVERS:
+                            # [핵심] 공백 제거를 통한 안전한 매칭
                             pend = df[(df['상태'] == '승인대기') & (df['승인담당자'].str.strip() == manager_name.strip())]
                             st.info(f"📢 {manager_name}님 승인 대기")
 
-                    if pend.empty: 
-                        with st.container(border=True): st.write("대기중인 건이 없습니다.")
+                    if pend.empty: st.info("대기중인 건이 없습니다.")
                     else:
                         for i, r in pend.iterrows():
+                            # [핵심] Expander 제목이 이제 정상적으로 보일 것입니다.
                             with st.expander(f"[{r['이름']}] {r['구분']} - {r['날짜및시간']}"):
-                                st.write(f"**사유:** {r['사유']}")
+                                st.write(f"사유: {r['사유']}")
                                 c_app, c_rej = st.columns(2)
                                 if c_app.button("승인", key=f"app_{i}"):
                                     if COMPANY == "장안 제이유":
@@ -653,6 +618,7 @@ with main_container.container():
                                         else: 
                                             update_attendance_step("근태신청", i, "2차승인대기", "반장")
                                     else:
+                                        # 울산: 즉시 최종승인
                                         update_attendance_step("근태신청", i, "최종승인")
                                     st.success("승인됨"); tm.sleep(1); st.rerun()
                                     
@@ -662,7 +628,7 @@ with main_container.container():
                 else: st.info("데이터 없음")
 
             with m_tab2:
-                st.write("**📝 공지사항/일정 등록**")
+                st.write("공지사항/일정 등록")
                 with st.form("n_form", clear_on_submit=True):
                     type_sel = st.selectbox("유형", ["공지사항", "일정"])
                     t = st.text_input("제목")
