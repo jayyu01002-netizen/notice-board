@@ -409,15 +409,13 @@ with main_container.container():
                         end = (datetime.strptime(e.strip(), "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
                     except: pass
                 
-                # [추가] 휴무 일정 색상 및 제목 처리
-                evt_color = "#8A2BE2" # 기본: 보라색
+                evt_color = "#8A2BE2" 
                 title_text = str(r['제목'])
                 
-                # [RED] 태그가 있으면 색상을 빨갛게 하고, 태그는 화면에서 지움
                 if title_text.startswith("[RED]"):
-                    evt_color = "#FF4B4B" # 빨간색
-                    title_text = title_text.replace("[RED]", "") # 태그 삭제
-                elif title_text.startswith("[휴무]"): # 구버전 호환
+                    evt_color = "#FF4B4B" 
+                    title_text = title_text.replace("[RED]", "")
+                elif title_text.startswith("[휴무]"): 
                     evt_color = "#FF4B4B"
 
                 events.append({"title": f"📢 {title_text}", "start": start, "end": end, "color": evt_color, "extendedProps": {"content": r['내용'], "type": "schedule"}})
@@ -671,19 +669,17 @@ with main_container.container():
                     c = st.text_area("내용")
                     is_imp = st.checkbox("중요 공지", value=False)
                     
-                    # [추가] 기간 선택 가능하게 변경
+                    # [추가] 기간 선택 가능
                     d_range = st.date_input("날짜 (기간 선택 가능)", value=[datetime.now(KST).date()], help="기간을 선택하려면 시작일과 종료일을 클릭하세요.")
                     
-                    # [추가] MASTER 전용 휴무 등록 옵션
                     is_holiday = False
                     if manager_id == "MASTER" and type_sel == "일정":
-                        is_holiday = st.checkbox("🚩 전사 휴무/특별 일정 (캘린더에 빨간색 표시, 글자 없음)")
+                        is_holiday = st.checkbox("🚩 전사 휴무/특별 일정 (캘린더에 빨간색 표시)")
 
                     if st.form_submit_button("등록"):
                         if type_sel == "공지사항": 
                             save_notice(COMPANY, t, c, is_imp)
                         else: 
-                            # 날짜 문자열 변환 로직
                             final_date_str = ""
                             if len(d_range) == 2:
                                 final_date_str = f"{d_range[0]} ~ {d_range[1]}"
@@ -694,10 +690,52 @@ with main_container.container():
                                 st.stop()
 
                             final_title = t
-                            if is_holiday: final_title = f"[RED]{t}" # 내부 식별용 태그 추가
+                            if is_holiday: final_title = f"[RED]{t}"
                             
                             save_schedule(COMPANY, final_date_str, final_title, c, manager_name)
                         st.success("등록 완료"); tm.sleep(1); st.rerun()
+                
+                # [추가] 등록된 일정 관리 (수정/삭제)
+                st.divider()
+                st.write("### 📋 등록된 일정 관리 (수정/삭제)")
+                df_sch = load_data("일정관리", COMPANY)
+                if not df_sch.empty:
+                    for i, r in df_sch.iterrows():
+                        # 자신이 작성했거나 MASTER인 경우에만 관리 가능
+                        if manager_id == "MASTER" or r['작성자'] == manager_name:
+                            with st.expander(f"{r['날짜']} : {r['제목']}"):
+                                
+                                # 날짜 파싱 (단일 or 기간)
+                                existing_title = str(r['제목'])
+                                is_red = False
+                                clean_title = existing_title
+                                if existing_title.startswith("[RED]"):
+                                    is_red = True
+                                    clean_title = existing_title.replace("[RED]", "")
+                                
+                                new_date_str = st.text_input("날짜 (YYYY-MM-DD 또는 ~ 범위)", value=r['날짜'], key=f"edit_sd_{i}")
+                                new_title = st.text_input("제목", value=clean_title, key=f"edit_st_{i}")
+                                new_content = st.text_area("내용", value=r['내용'], key=f"edit_sc_{i}")
+                                
+                                new_is_red = is_red
+                                if manager_id == "MASTER":
+                                    new_is_red = st.checkbox("🚩 휴무(빨간색) 태그 적용", value=is_red, key=f"chk_red_{i}")
+                                
+                                c1, c2 = st.columns(2)
+                                if c1.button("수정", key=f"upd_s_{i}"):
+                                    final_t = new_title
+                                    if new_is_red: final_t = f"[RED]{new_title}"
+                                    
+                                    # 날짜(2열), 제목(3열), 내용(4열)
+                                    update_data_cell("일정관리", i, 2, new_date_str)
+                                    update_data_cell("일정관리", i, 3, final_t)
+                                    update_data_cell("일정관리", i, 4, new_content)
+                                    st.success("수정됨"); tm.sleep(1); st.rerun()
+                                    
+                                if c2.button("삭제", key=f"del_s_{i}"):
+                                    delete_row_by_index("일정관리", i)
+                                    st.success("삭제됨"); tm.sleep(1); st.rerun()
+
             with m_tab3:
                 st.write("### 📊 월별 연차 사용 현황")
                 df = load_data("근태신청", COMPANY)
