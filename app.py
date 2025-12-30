@@ -3,7 +3,7 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime, timedelta
-# [핵심 수정 1] time 객체와 time 모듈의 이름을 명확히 분리 (충돌 원천 차단)
+# [유지] 캘린더 충돌 방지용 임포트
 from datetime import time as dt_time 
 import time as tm 
 import uuid
@@ -36,10 +36,10 @@ COMPANIES = {
     "0645": "울산 제이유"
 }
 
-# --- [스타일] CSS (모바일 글씨 삭제 + 캘린더 복구) ---
+# --- [스타일] CSS (깨진 글씨 강제 삭제 및 아이콘 대체) ---
 st.markdown("""
 <style>
-    /* [1] 모바일 전용 스타일 */
+    /* [1] 모바일 화면 최적화 */
     @media only screen and (max-width: 768px) {
         .block-container {
             padding-top: 1rem !important;
@@ -47,32 +47,36 @@ st.markdown("""
             padding-right: 0.5rem !important;
         }
         
-        /* [핵심 수정 2] 깨지는 화살표 텍스트(keyboard_double...) 물리적 삭제 */
-        /* 글자 크기를 0으로 만들어 공간 자체를 없앰 */
-        button[kind="header"], [data-testid="stSidebarCollapsedControl"] {
-            font-size: 0px !important; 
+        /* [핵심] 사이드바 토글 버튼의 '깨진 텍스트' 강제 숨김 */
+        [data-testid="stSidebarCollapsedControl"] {
+            font-size: 0px !important;
             color: transparent !important;
-            width: 50px !important;
-            height: 50px !important;
         }
         
-        /* 삭제된 자리에 햄버거 아이콘(☰) 강제 생성 */
+        /* 숨긴 자리에 '☰' 아이콘 강제 삽입 (깨지지 않는 텍스트 기호 사용) */
         [data-testid="stSidebarCollapsedControl"]::after {
-            content: "☰";
-            color: #333333;
-            font-size: 28px !important; /* 아이콘은 크게 */
+            content: "☰"; 
+            font-size: 28px !important;
+            color: #000000 !important;
             font-weight: bold;
             position: absolute;
-            top: 10px;
-            left: 10px;
-            display: block !important;
+            top: 0px;
+            left: 0px;
+            visibility: visible !important;
         }
 
-        /* 제목 최적화 */
+        /* [핵심] 드롭다운(Selectbox) 화살표 텍스트 숨김 */
+        /* 드롭다운 내의 아이콘 컨테이너를 숨겨버림 */
+        div[data-baseweb="select"] > div:nth-child(2) {
+            visibility: hidden !important;
+            width: 0px !important;
+        }
+
+        /* 제목 글자 크기 최적화 */
         h2 { font-size: 1.3rem !important; }
     }
 
-    /* [2] 버튼 스타일 */
+    /* [2] 버튼 디자인 */
     div.stButton > button {
         width: 100%;
         background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
@@ -83,7 +87,7 @@ st.markdown("""
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
 
-    /* [3] 캘린더 글씨 색상 (평일 검정 / 주말 색상) */
+    /* [3] 캘린더 스타일 */
     .fc { background: white !important; border-radius: 10px; padding: 5px; }
     .fc-daygrid-day-number, .fc-col-header-cell-cushion {
         color: #000000 !important; 
@@ -93,7 +97,7 @@ st.markdown("""
     .fc-day-sun .fc-daygrid-day-number, .fc-day-sun .fc-col-header-cell-cushion { color: #FF4B4B !important; }
     .fc-day-sat .fc-daygrid-day-number, .fc-day-sat .fc-col-header-cell-cushion { color: #1E90FF !important; }
     
-    /* [4] 입력창 둥글게 */
+    /* [4] 입력창 스타일 */
     .stTextInput input, .stSelectbox div, .stDateInput input, .stTimeInput input {
         border-radius: 8px !important;
     }
@@ -356,7 +360,6 @@ with main_container.container():
                 except: pass
 
         if view_type == "달력":
-            # [수정] 캘린더 글씨 색상 검정 강제
             calendar_css = """
                 .fc { background: white !important; border-radius: 10px; padding: 5px; }
                 .fc-daygrid-day-number, .fc-col-header-cell-cushion { color: #000000 !important; text-decoration: none !important; }
@@ -383,7 +386,7 @@ with main_container.container():
         else:
             st.dataframe(pd.DataFrame(events))
 
-    # 4. 근태신청 (수정: time -> dt_time 사용)
+    # 4. 근태신청
     with tab4:
         st.write("### 📅 연차/근태 신청")
         if st.button("📝 신청서 작성", on_click=toggle_attend): pass
@@ -395,7 +398,7 @@ with main_container.container():
                     st.write("**📆 일시 및 시간 선택 (단일)**")
                     dc1, dc2, dc3 = st.columns(3)
                     d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
-                    # [핵심] dt_time(9,0) 사용 -> 에러 해결
+                    # [유지] 충돌 없는 dt_time 사용
                     t_start = dc2.time_input("시작 시간", value=dt_time(9,0))
                     t_end = dc3.time_input("종료 시간", value=dt_time(18,0))
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
@@ -497,7 +500,6 @@ with main_container.container():
             m_tab1, m_tab2, m_tab3 = st.tabs(["✅ 결재 관리", "📢 공지/일정", "📊 통계"])
             with m_tab1:
                 df = load_data("근태신청", COMPANY)
-                # [수정] KeyError 방지: 컬럼 확인
                 if not df.empty and '상태' in df.columns and '승인담당자' in df.columns:
                     pend = pd.DataFrame()
                     if manager_id == "MASTER":
