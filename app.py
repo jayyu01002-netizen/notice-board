@@ -23,7 +23,7 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 제목 겹침 해결 & 버튼 크기 최적화
+# [스타일] CSS: 탭 튕김 방지용 커스텀 메뉴 & 버튼 디자인
 # =========================================================
 st.markdown("""
 <style>
@@ -34,41 +34,80 @@ st.markdown("""
         .block-container { padding-top: 2rem !important; }
     }
 
-    /* [2] 상단 이상한 아이콘 및 사이드바 숨김 */
+    /* [2] 상단 불필요 요소 숨김 */
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
-
-    /* [3] Expander 아이콘 숨김 */
     div[data-testid="stExpander"] summary span,
     div[data-testid="stExpander"] summary svg { display: none !important; }
     div[data-testid="stExpander"] summary { padding-left: 10px !important; }
 
-    /* [4] 버튼 스타일 */
+    /* [3] 커스텀 네비게이션 (라디오 버튼을 탭처럼 꾸미기) */
+    div.row-widget.stRadio > div {
+        flex-direction: row;
+        justify-content: center;
+        gap: 5px;
+        background: #f0f2f6;
+        padding: 5px;
+        border-radius: 10px;
+        overflow-x: auto; /* 모바일에서 가로 스크롤 허용 */
+        flex-wrap: nowrap;
+    }
+    div.row-widget.stRadio > div > label {
+        background: transparent;
+        border-radius: 8px;
+        padding: 8px 12px;
+        margin: 0 !important;
+        width: auto !important;
+        border: none;
+        cursor: pointer;
+        font-weight: bold;
+        transition: all 0.2s;
+        text-align: center;
+        white-space: nowrap; /* 줄바꿈 방지 */
+    }
+    /* 선택된 탭 스타일 */
+    div.row-widget.stRadio > div > label[data-checked="true"] {
+        background: white !important;
+        color: #4b6cb7 !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    /* 라디오 버튼 원형 숨김 */
+    div.row-widget.stRadio div[role="radiogroup"] > label > div:first-child {
+        display: none !important;
+    }
+
+    /* [4] 일반 버튼 (새로고침 등) -> 검정색, 작게 */
     div.stButton > button {
         width: auto !important;
-        padding: 0.4rem 1rem;
-        border-radius: 8px;
-        font-weight: bold;
-        border: none;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
-        color: white !important;
+        padding: 0.3rem 0.7rem !important;
+        font-size: 13px !important;
+        border-radius: 6px !important;
+        background: #2b2b2b !important;
+        color: #eeeeee !important;
+        border: 1px solid #444444 !important;
+        box-shadow: none !important;
+        margin-top: 5px !important;
+    }
+    div.stButton > button:hover {
+        background: #000000 !important;
+        color: #ffffff !important;
     }
 
-    /* [5] 폼 내부 버튼은 꽉 차게 */
+    /* [5] 폼 내부 버튼 (신청/등록) -> 기존 스타일 유지 (크고 초록색) */
     div[data-testid="stForm"] div.stButton > button {
         width: 100% !important;
-        background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%);
+        padding: 0.5rem 1rem !important;
+        font-size: 16px !important;
+        background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%) !important;
+        color: white !important;
+        border: none !important;
     }
 
-    /* [6] 로그아웃 버튼 (작고 빨갛게) */
+    /* [6] 로그아웃 버튼 -> 빨간색 */
     div[data-testid="column"] button[kind="secondary"] {
         background: #FF4B4B !important;
         color: white !important;
-        font-size: 12px !important;
-        padding: 0.2rem 0.5rem !important;
-        height: auto !important;
-        min-height: 0px !important;
+        border: none !important;
     }
 
     /* [7] 입력창 디자인 */
@@ -244,11 +283,25 @@ with main_container.container():
     def toggle_sugg(): st.session_state['show_sugg_form'] = not st.session_state['show_sugg_form']
     def toggle_attend(): st.session_state['show_attend_form'] = not st.session_state['show_attend_form']
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 공지", "🗣️ 제안", "📆 근무표", "📅 근태신청", "⚙️ 관리자"])
+    # ------------------------------------------------------------------
+    # [네비게이션] 탭 튕김 방지를 위해 'st.tabs' 대신 'st.radio'를 탭처럼 사용
+    # ------------------------------------------------------------------
+    tabs = ["📋 공지", "🗣️ 제안", "📆 근무표", "📅 근태신청", "⚙️ 관리자"]
+    selected_tab = st.radio("메뉴 선택", tabs, horizontal=True, label_visibility="collapsed")
+    
+    st.write("") # 탭과 본문 사이 약간의 간격
 
+    # ----------------------------------
     # 1. 공지사항
-    with tab1:
-        if st.button("🔄 새로고침", key="re_1"): st.cache_data.clear(); st.rerun()
+    # ----------------------------------
+    if selected_tab == "📋 공지":
+        # [수정] 새로고침 버튼 우측 끝 배치
+        c_space, c_btn = st.columns([0.85, 0.15])
+        with c_btn:
+            if st.button("🔄 새로고침", key="re_1"): 
+                st.cache_data.clear()
+                st.rerun()
+        
         df = load_data("공지사항", COMPANY)
         if df.empty: st.info("등록된 공지사항이 없습니다.")
         else:
@@ -260,8 +313,10 @@ with main_container.container():
                     st.caption(f"📅 {row['작성일']}")
                     st.markdown(f"{row['내용']}")
 
+    # ----------------------------------
     # 2. 제안
-    with tab2:
+    # ----------------------------------
+    elif selected_tab == "🗣️ 제안":
         if st.button("✍️ 제안 작성하기", on_click=toggle_sugg): pass
         
         if st.session_state['show_sugg_form']:
@@ -299,13 +354,21 @@ with main_container.container():
                                 st.success("삭제됨")
                                 tm.sleep(1); st.rerun()
 
+    # ----------------------------------
     # 3. 근무표
-    with tab3:
-        c_btn, c_view = st.columns([0.6, 0.4])
+    # ----------------------------------
+    elif selected_tab == "📆 근무표":
+        # [수정] 새로고침 버튼을 보기(목록/달력) 버튼 바로 왼쪽으로 배치
+        c_space, c_btn, c_view = st.columns([0.6, 0.15, 0.25])
+        with c_space:
+            st.write("") # 여백 확보
         with c_btn:
             if st.button("🔄 새로고침", key="cal_ref"): 
-                st.cache_data.clear(); st.session_state['calendar_key'] = str(uuid.uuid4()); st.rerun()
+                st.cache_data.clear()
+                st.session_state['calendar_key'] = str(uuid.uuid4())
+                st.rerun()
         with c_view:
+            # 라디오 버튼 변경 시에도 상단 탭(근무표)은 유지됨
             view_type = st.radio("보기", ["달력", "목록"], horizontal=True, label_visibility="collapsed")
 
         events = []
@@ -352,7 +415,6 @@ with main_container.container():
                 except: pass
 
         if view_type == "달력":
-            # [수정] 평일 날짜 색상(#333333) 강제 지정 추가
             calendar_css = """
                 .fc { background: white !important; }
                 .fc-daygrid-day-number { color: #333333 !important; text-decoration: none !important; }
@@ -387,8 +449,10 @@ with main_container.container():
                 st.dataframe(list_df, column_config={"color": None, "extendedProps": None, "resourceId": None, "title": "내용", "start": "시작", "end": "종료"}, hide_index=True, use_container_width=True)
             else: st.info("등록된 일정이 없습니다.")
 
+    # ----------------------------------
     # 4. 근태신청
-    with tab4:
+    # ----------------------------------
+    elif selected_tab == "📅 근태신청":
         st.write("### 📅 연차/근태 신청")
         if st.button("📝 신청서 작성", on_click=toggle_attend): pass
         
@@ -447,8 +511,10 @@ with main_container.container():
                         for _, r in my_df.iterrows(): st.info(f"{r['날짜및시간']} | {r['구분']} | {r['상태']}")
                 else: st.error("데이터가 없습니다.")
 
+    # ----------------------------------
     # 5. 관리자
-    with tab5:
+    # ----------------------------------
+    elif selected_tab == "⚙️ 관리자":
         st.subheader("⚙️ 관리자 및 조장/반장 전용")
         if 'logged_in_manager' not in st.session_state:
             user_db = load_user_db()
@@ -485,7 +551,7 @@ with main_container.container():
             manager_id = st.session_state['logged_in_manager']
             manager_name = manager_id
             
-            # 로그아웃 버튼: 작고 심플하게
+            # 로그아웃 버튼 (작고 빨갛게, 우측)
             c_info, c_logout = st.columns([0.8, 0.2])
             with c_info:
                 st.success(f"👋 접속중: {manager_name}")
@@ -505,6 +571,7 @@ with main_container.container():
                                 del user_db[target]; save_user_db(user_db)
                                 st.success("초기화 완료"); tm.sleep(1); st.rerun()
 
+            # 관리자 내부 탭은 기존 st.tabs 유지 (여기서는 튕김 문제가 덜 발생하며 로직상 분리 필요)
             m_tab1, m_tab2, m_tab3 = st.tabs(["✅ 결재", "📢 공지/일정", "📊 통계"])
             with m_tab1:
                 df = load_data("근태신청", COMPANY)
