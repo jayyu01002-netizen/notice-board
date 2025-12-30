@@ -23,16 +23,28 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 앱 스타일 슬라이드 탭 & 다크모드 방어
+# [스타일] CSS: 다크모드 강제 해제 & 슬라이드 탭 메뉴 적용
 # =========================================================
 st.markdown("""
 <style>
-    /* [1] 전체 테마 강제 설정 (흰 배경 + 검정 글씨) */
-    .stApp {
-        background-color: #ffffff !important;
+    /* [1] 다크모드 원천 차단 (라이트 모드 색상 강제 지정) */
+    :root {
+        --primary-color: #ef4444;
+        --background-color: #ffffff;
+        --secondary-background-color: #f9fafb;
+        --text-color: #1f2937;
+        --font: 'Pretendard', sans-serif;
     }
-    h1, h2, h3, h4, h5, h6, p, span, div, label, li, .stMarkdown {
-        color: #333333 !important;
+    
+    /* 기본 배경 및 폰트 설정 */
+    .stApp {
+        background-color: var(--background-color) !important;
+        color: var(--text-color) !important;
+    }
+    
+    /* 모든 텍스트 강제 검정 (드롭다운, 입력창 포함) */
+    h1, h2, h3, h4, h5, h6, p, div, span, label, li, input, textarea, select, button {
+        color: #1f2937 !important;
         font-family: 'Pretendard', sans-serif !important;
     }
 
@@ -55,77 +67,103 @@ st.markdown("""
        [4] ★ 핵심: 앱 스타일 슬라이드 탭 메뉴 (Red Underline) ★ 
        ================================================================
     */
-    /* 라디오 버튼 컨테이너를 가로 스크롤 탭바로 변신 */
-    div.row-widget.stRadio > div {
+    /* 라디오 버튼 컨테이너 -> 가로 스크롤 탭바로 변신 */
+    [data-testid="stRadio"] > div {
+        display: flex;
         flex-direction: row;
-        justify-content: flex-start; /* 왼쪽 정렬 */
-        gap: 0px !important;
-        background: transparent !important;
-        padding: 0px !important;
-        border-bottom: 2px solid #f0f0f0; /* 탭 하단 전체 회색 라인 */
-        overflow-x: auto; /* 가로 스크롤 허용 */
-        flex-wrap: nowrap; /* 줄바꿈 금지 */
-        -webkit-overflow-scrolling: touch; /* 모바일 부드러운 스크롤 */
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 0px;
+        background: white !important;
+        border-bottom: 2px solid #f3f4f6; /* 하단 전체 회색 라인 */
+        padding-bottom: 0px !important;
+        margin-bottom: 15px;
+        -webkit-overflow-scrolling: touch; /* 부드러운 스크롤 */
     }
-    
-    /* 개별 탭 버튼 (기본 상태) */
-    div.row-widget.stRadio > div > label {
+
+    /* 개별 메뉴 아이템 (라벨) */
+    [data-testid="stRadio"] label {
         background-color: transparent !important;
         border: none !important;
         box-shadow: none !important;
-        color: #999999 !important; /* 선택 안된 글씨: 연한 회색 */
-        font-weight: 600 !important;
-        font-size: 16px !important;
-        padding: 12px 16px !important; /* 터치하기 좋은 크기 */
         margin: 0 !important;
+        padding: 10px 16px !important; /* 터치 영역 확보 */
         border-radius: 0 !important;
-        white-space: nowrap; /* 글자 줄바꿈 방지 */
-        transition: all 0.2s ease-in-out;
-        border-bottom: 2px solid transparent !important; /* 밑줄 공간 확보 */
+        cursor: pointer;
+        transition: all 0.2s ease;
+        min-width: fit-content;
+        border-bottom: 3px solid transparent !important; /* 밑줄 자리 확보 */
     }
-    
-    /* 개별 탭 버튼 (선택된 상태) */
-    div.row-widget.stRadio > div > label[data-checked="true"] {
-        color: #ff4b4b !important; /* 선택된 글씨: 빨간색 */
-        border-bottom: 2px solid #ff4b4b !important; /* 선택된 밑줄: 빨간색 */
-        background-color: transparent !important;
-        opacity: 1 !important;
-    }
-    
-    /* 라디오 버튼의 동그라미 숨김 */
-    div.row-widget.stRadio div[role="radiogroup"] > label > div:first-child {
+
+    /* 라디오 버튼 동그라미 숨기기 (핵심) */
+    [data-testid="stRadio"] label > div:first-child {
         display: none !important;
     }
 
-    /* [5] 버튼 및 입력창 디자인 (심플) */
+    /* 텍스트 스타일 (기본: 연한 회색) */
+    [data-testid="stRadio"] label p {
+        color: #9ca3af !important; 
+        font-weight: 600 !important;
+        font-size: 16px !important;
+        margin: 0 !important;
+    }
+
+    /* [선택된 상태] :has 선택자 사용 (브라우저 표준) */
+    /* 선택된 탭: 빨간 밑줄 */
+    [data-testid="stRadio"] label:has(input:checked) {
+        border-bottom: 3px solid #ef4444 !important; 
+    }
+    
+    /* 선택된 탭: 진한 빨간/검정 글씨 */
+    [data-testid="stRadio"] label:has(input:checked) p {
+        color: #ef4444 !important; 
+        font-weight: 800 !important;
+    }
+
+    /* [5] 입력창 및 드롭다운 (다크모드 안보임 해결) */
+    .stTextInput > div > div > input {
+        background-color: #ffffff !important;
+        color: #1f2937 !important;
+        border: 1px solid #e5e7eb !important;
+    }
+    .stSelectbox > div > div > div {
+        background-color: #ffffff !important;
+        color: #1f2937 !important;
+        border: 1px solid #e5e7eb !important;
+    }
+    /* 드롭다운 메뉴 아이템 색상 강제 */
+    div[data-baseweb="popover"] li, div[data-baseweb="popover"] div {
+        color: #1f2937 !important;
+        background-color: #ffffff !important;
+    }
+
+    /* [6] 버튼 디자인 */
     div.stButton > button {
         width: 100% !important;        
         border-radius: 8px !important;
         font-weight: 600 !important;
-        border: 1px solid #e0e0e0 !important;
-        background-color: #f9f9f9 !important;
-        color: #333333 !important;
+        border: 1px solid #e5e7eb !important;
+        background-color: #f9fafb !important;
+        color: #374151 !important;
         padding: 0.6rem !important;
+        box-shadow: none !important;
     }
-    /* 중요 버튼 (등록 등) - 빨간색 포인트 */
+    /* 포인트 버튼 (빨강) */
     div[data-testid="stForm"] div.stButton > button {
-        background: #ff4b4b !important; 
+        background: #ef4444 !important; 
         color: white !important;
         border: none !important;
     }
-    
-    /* 입력창 스타일 */
-    .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
-        background-color: #ffffff !important;
-        color: #333333 !important;
-        border: 1px solid #e0e0e0 !important;
-        border-radius: 8px;
+    div[data-testid="column"] button[kind="secondary"] {
+        background: #ef4444 !important;
+        color: white !important;
+        border: none !important;
     }
 
-    /* [6] 달력 스타일 (글씨 안보임 해결) */
+    /* [7] 달력 스타일 */
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
-    .fc-toolbar-title { color: #333333 !important; }
-    .fc-button { color: #333333 !important; border: 1px solid #ddd !important; }
+    .fc-toolbar-title { color: #1f2937 !important; }
+    .fc-button { color: #374151 !important; border: 1px solid #e5e7eb !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -299,12 +337,12 @@ with main_container.container():
     def toggle_attend(): st.session_state['show_attend_form'] = not st.session_state['show_attend_form']
 
     # ------------------------------------------------------------------
-    # [네비게이션] 슬라이드 탭 스타일 적용
+    # [네비게이션] 앱 스타일 슬라이딩 탭
     # ------------------------------------------------------------------
     tabs = ["📋 공지", "🗣️ 제안", "📆 근무표", "📅 근태신청", "⚙️ 관리자"]
     selected_tab = st.radio("메뉴", tabs, horizontal=True, label_visibility="collapsed")
     
-    st.write("") # 간격
+    st.write("") 
 
     # 1. 공지사항
     if selected_tab == "📋 공지":
@@ -454,10 +492,10 @@ with main_container.container():
         if view_type == "달력":
             calendar_css = """
                 .fc { background: white !important; }
-                .fc-toolbar-title { color: #333333 !important; font-weight: bold !important; font-size: 1.5rem !important; }
-                .fc-button { color: #333333 !important; border: 1px solid #ddd !important; }
-                .fc-daygrid-day-number { color: #333333 !important; text-decoration: none !important; }
-                .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; font-weight: bold !important; }
+                .fc-toolbar-title { color: #1f2937 !important; font-weight: bold !important; font-size: 1.5rem !important; }
+                .fc-button { color: #374151 !important; border: 1px solid #e5e7eb !important; }
+                .fc-daygrid-day-number { color: #1f2937 !important; text-decoration: none !important; }
+                .fc-col-header-cell-cushion { color: #1f2937 !important; text-decoration: none !important; font-weight: bold !important; }
             """
             cal = calendar(events=events, options={"initialView": "dayGridMonth", "height": 750}, key=st.session_state['calendar_key'], custom_css=calendar_css)
             
@@ -597,7 +635,6 @@ with main_container.container():
             manager_id = st.session_state['logged_in_manager']
             manager_name = manager_id
             
-            # 로그아웃 버튼 공간 확보
             c_info, c_logout = st.columns([0.75, 0.25])
             with c_info:
                 st.success(f"👋 접속중: {manager_name}")
