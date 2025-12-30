@@ -23,7 +23,7 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 레이아웃 및 모바일 최적화 (달력 CSS는 아래쪽 로직에 직접 넣음)
+# [스타일] CSS: 디자인 유지 + 모바일/달력 최적화
 # =========================================================
 st.markdown("""
 <style>
@@ -32,7 +32,6 @@ st.markdown("""
     
     @media (max-width: 640px) {
         h1 { font-size: 1.5rem !important; margin-top: 0.5rem !important; }
-        /* 모바일 상단 여백 넉넉하게 확보 */
         .block-container { padding-top: 7rem !important; } 
     }
 
@@ -115,6 +114,19 @@ st.markdown("""
     }
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
     p { font-size: 16px; word-break: keep-all; }
+
+    /* [8] 달력 헤더(월/년) 글씨색 검정색으로 강제 지정 */
+    .fc-toolbar-title { 
+        color: #333333 !important; 
+        font-weight: 800 !important;
+    }
+    .fc-button { color: #333333 !important; border: 1px solid #ddd !important; }
+    .fc-daygrid-day-number { color: #333333 !important; text-decoration: none !important; }
+    .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; font-weight: bold !important; }
+    .fc-day-sun .fc-daygrid-day-number { color: #FF4B4B !important; }
+    .fc-day-sun .fc-col-header-cell-cushion { color: #FF4B4B !important; }
+    .fc-day-sat .fc-daygrid-day-number { color: #1E90FF !important; }
+    .fc-day-sat .fc-col-header-cell-cushion { color: #1E90FF !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -396,7 +408,19 @@ with main_container.container():
                         start = s.strip()
                         end = (datetime.strptime(e.strip(), "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
                     except: pass
-                events.append({"title": f"📢 {r['제목']}", "start": start, "end": end, "color": "#8A2BE2", "extendedProps": {"content": r['내용'], "type": "schedule"}})
+                
+                # [추가] 휴무 일정 색상 및 제목 처리
+                evt_color = "#8A2BE2" # 기본: 보라색
+                title_text = str(r['제목'])
+                
+                # [RED] 태그가 있으면 색상을 빨갛게 하고, 태그는 화면에서 지움
+                if title_text.startswith("[RED]"):
+                    evt_color = "#FF4B4B" # 빨간색
+                    title_text = title_text.replace("[RED]", "") # 태그 삭제
+                elif title_text.startswith("[휴무]"): # 구버전 호환
+                    evt_color = "#FF4B4B"
+
+                events.append({"title": f"📢 {title_text}", "start": start, "end": end, "color": evt_color, "extendedProps": {"content": r['내용'], "type": "schedule"}})
 
         df_cal = load_data("근태신청", COMPANY)
         approved_df = pd.DataFrame()
@@ -424,7 +448,6 @@ with main_container.container():
                 except: pass
 
         if view_type == "달력":
-            # [핵심 수정] 달력 내부 아이프레임에 적용될 CSS (제목 색상 #333333)
             calendar_css = """
                 .fc { background: white !important; }
                 .fc-toolbar-title { color: #333333 !important; font-weight: bold !important; font-size: 1.5rem !important; }
@@ -647,10 +670,33 @@ with main_container.container():
                     t = st.text_input("제목")
                     c = st.text_area("내용")
                     is_imp = st.checkbox("중요 공지", value=False)
-                    d_s = st.date_input("날짜(일정용)", value=datetime.now(KST))
+                    
+                    # [추가] 기간 선택 가능하게 변경
+                    d_range = st.date_input("날짜 (기간 선택 가능)", value=[datetime.now(KST).date()], help="기간을 선택하려면 시작일과 종료일을 클릭하세요.")
+                    
+                    # [추가] MASTER 전용 휴무 등록 옵션
+                    is_holiday = False
+                    if manager_id == "MASTER" and type_sel == "일정":
+                        is_holiday = st.checkbox("🚩 전사 휴무/특별 일정 (캘린더에 빨간색 표시, 글자 없음)")
+
                     if st.form_submit_button("등록"):
-                        if type_sel == "공지사항": save_notice(COMPANY, t, c, is_imp)
-                        else: save_schedule(COMPANY, str(d_s), t, c, manager_name)
+                        if type_sel == "공지사항": 
+                            save_notice(COMPANY, t, c, is_imp)
+                        else: 
+                            # 날짜 문자열 변환 로직
+                            final_date_str = ""
+                            if len(d_range) == 2:
+                                final_date_str = f"{d_range[0]} ~ {d_range[1]}"
+                            elif len(d_range) == 1:
+                                final_date_str = str(d_range[0])
+                            else:
+                                st.error("날짜를 선택해주세요.")
+                                st.stop()
+
+                            final_title = t
+                            if is_holiday: final_title = f"[RED]{t}" # 내부 식별용 태그 추가
+                            
+                            save_schedule(COMPANY, final_date_str, final_title, c, manager_name)
                         st.success("등록 완료"); tm.sleep(1); st.rerun()
             with m_tab3:
                 st.write("### 📊 월별 연차 사용 현황")
@@ -679,9 +725,8 @@ with main_container.container():
                             else:
                                 st.info("집계할 데이터가 부족합니다.")
                         except Exception as e:
-                            st.warning("⚠️ 통계 집계 중 오류가 발생했습니다. 아래 원본 데이터를 확인해주세요.")
+                            st.warning("⚠️ 통계 집계 중 오류가 발생했습니다.")
                             if final_list: st.dataframe(pd.DataFrame(final_list))
-                            else: st.error(f"오류 상세: {e}")
 
                     else: st.info("집계 데이터 없음")
                 else: st.info("데이터 없음")
