@@ -270,7 +270,7 @@ def calculate_leave_usage(date_str, leave_type):
 if 'company_name' not in st.session_state:
     with main_container.container():
         st.markdown("<br><br>", unsafe_allow_html=True)
-        st.title("🏢 제이유 그룹")
+        st.title("🏢 제이유 그룹 인트라넷")
         with st.container(border=True):
             st.write("접속하려는 회사의 코드를 입력해주세요.")
             with st.form("login_form"):
