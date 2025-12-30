@@ -23,110 +23,104 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 디자인 유지 + 모바일/달력 최적화
+# [스타일] CSS: 앱 스타일 슬라이드 메뉴 & 전체 디자인 리뉴얼
 # =========================================================
 st.markdown("""
 <style>
-    /* [1] 제목(h1) 및 상단 여백 설정 (모바일 최적화) */
-    h1 { padding-top: 1rem !important; font-size: 2rem !important; }
-    
-    @media (max-width: 640px) {
-        h1 { font-size: 1.5rem !important; margin-top: 0.5rem !important; }
-        .block-container { padding-top: 7rem !important; } 
+    /* [1] 폰트 및 기본 배경 */
+    .stApp {
+        background-color: #ffffff; /* 전체 흰색 배경으로 깔끔하게 */
+        font-family: 'Pretendard', sans-serif;
     }
 
-    /* [2] 상단 불필요 요소 숨김 */
+    /* [2] 상단 여백 (모바일 주소창 가림 방지) */
+    h1 { 
+        padding-top: 1rem !important; 
+        font-size: 1.8rem !important; 
+        font-weight: 800 !important;
+        color: #111827;
+    }
+    
+    @media (max-width: 640px) {
+        h1 { margin-top: 3rem !important; font-size: 1.5rem !important; }
+        .block-container { padding-top: 6rem !important; } 
+    }
+
+    /* [3] 상단 불필요 요소 숨김 */
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
     
-    /* [3] 커스텀 네비게이션 (라디오 버튼) */
+    /* [4] ★ 핵심: 슬라이드 탭 메뉴 디자인 (요청하신 스타일) ★ */
     div.row-widget.stRadio > div {
-        flex-direction: row;
-        justify-content: center;
-        gap: 5px;
-        background: #f0f2f6;
-        padding: 5px;
-        border-radius: 10px;
-        overflow-x: auto;
+        background: transparent !important; /* 배경 투명 */
+        border: none !important;
+        box-shadow: none !important;
+        gap: 0px !important;
+        border-bottom: 2px solid #f3f4f6; /* 하단에 얇은 회색 줄 */
+        padding-bottom: 0px !important;
+        overflow-x: auto; /* 모바일 가로 스크롤 허용 */
         flex-wrap: nowrap;
+        -webkit-overflow-scrolling: touch; /* 부드러운 스크롤 */
     }
+    
+    /* 탭 버튼 기본 스타일 */
     div.row-widget.stRadio > div > label {
-        background: transparent;
-        border-radius: 8px;
-        padding: 8px 12px;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        color: #9ca3af !important; /* 선택 안된 글자: 회색 */
+        font-weight: 600 !important;
+        font-size: 15px !important;
+        padding: 10px 15px !important;
         margin: 0 !important;
-        width: auto !important;
-        border: none;
-        cursor: pointer;
-        font-weight: bold;
-        transition: all 0.2s;
-        text-align: center;
+        border-radius: 0 !important; /* 둥근 모서리 제거 */
+        transition: all 0.2s ease;
         white-space: nowrap;
     }
+    
+    /* 선택된 탭 스타일 (빨간 밑줄 + 진한 글씨) */
     div.row-widget.stRadio > div > label[data-checked="true"] {
-        background: white !important;
-        color: #4b6cb7 !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        color: #ef4444 !important; /* 붉은색 글씨 */
+        border-bottom: 3px solid #ef4444 !important; /* 붉은색 밑줄 */
+        opacity: 1 !important;
     }
+    
+    /* 라디오 버튼 원형 숨김 */
     div.row-widget.stRadio div[role="radiogroup"] > label > div:first-child {
         display: none !important;
     }
 
-    /* [4] 일반 버튼 */
+    /* [5] 버튼 디자인 (심플하게) */
     div.stButton > button {
         width: 100% !important;        
-        padding: 0.3rem 0.5rem !important;
-        font-size: 13px !important;
-        border-radius: 6px !important;
-        background: #2b2b2b !important;
-        color: #eeeeee !important;
-        border: 1px solid #444444 !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        border: 1px solid #e5e7eb !important;
+        background-color: #f9fafb !important;
+        color: #374151 !important;
         box-shadow: none !important;
-        margin-top: 5px !important;
-        white-space: nowrap !important;
+        padding: 0.5rem !important;
     }
-    div.stButton > button:hover {
-        background: #000000 !important;
-        color: #ffffff !important;
-    }
-
-    /* [5] 폼 내부 버튼 */
+    /* 중요 버튼 (등록/신청 등) */
     div[data-testid="stForm"] div.stButton > button {
-        width: 100% !important;
-        padding: 0.5rem 1rem !important;
-        font-size: 16px !important;
-        background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%) !important;
+        background: #ef4444 !important; /* 포인트 컬러 (Red) */
         color: white !important;
         border: none !important;
     }
-
-    /* [6] 로그아웃/삭제 버튼 (빨간색) */
-    div[data-testid="column"] button[kind="secondary"] {
-        background: #FF4B4B !important;
-        color: white !important;
-        border: none !important;
-        white-space: nowrap !important;
-    }
-
-    /* [7] 입력창 디자인 */
+    
+    /* [6] 입력창 디자인 */
     .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
         border-radius: 8px;
+        border: 1px solid #e5e7eb;
+        background-color: #ffffff;
     }
-    iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
-    p { font-size: 16px; word-break: keep-all; }
 
-    /* [8] 달력 헤더(월/년) 글씨색 검정색으로 강제 지정 */
-    .fc-toolbar-title { 
-        color: #333333 !important; 
-        font-weight: 800 !important;
-    }
+    /* [7] 달력 스타일 (글씨 검정색 강제) */
+    iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
+    .fc-toolbar-title { color: #111827 !important; font-weight: 800 !important; }
     .fc-button { color: #333333 !important; border: 1px solid #ddd !important; }
+    .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; }
     .fc-daygrid-day-number { color: #333333 !important; text-decoration: none !important; }
-    .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; font-weight: bold !important; }
-    .fc-day-sun .fc-daygrid-day-number { color: #FF4B4B !important; }
-    .fc-day-sun .fc-col-header-cell-cushion { color: #FF4B4B !important; }
-    .fc-day-sat .fc-daygrid-day-number { color: #1E90FF !important; }
-    .fc-day-sat .fc-col-header-cell-cushion { color: #1E90FF !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -270,17 +264,19 @@ def calculate_leave_usage(date_str, leave_type):
 # ==========================================
 if 'company_name' not in st.session_state:
     with main_container.container():
-        st.title("🏢 제이유 그룹 인트라넷")
-        st.write("접속하려는 회사의 코드를 입력해주세요.")
-        with st.form("login_form"):
-            pw_input = st.text_input("회사 접속 코드", type="password")
-            if st.form_submit_button("로그인"):
-                if pw_input in COMPANIES:
-                    st.session_state['company_name'] = COMPANIES[pw_input]
-                    st.session_state['calendar_key'] = str(uuid.uuid4())
-                    st.rerun()
-                else:
-                    st.error("잘못된 접속 코드입니다.")
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.title("🏢 제이유 그룹")
+        with st.container(border=True):
+            st.write("접속하려는 회사의 코드를 입력해주세요.")
+            with st.form("login_form"):
+                pw_input = st.text_input("회사 접속 코드", type="password")
+                if st.form_submit_button("로그인"):
+                    if pw_input in COMPANIES:
+                        st.session_state['company_name'] = COMPANIES[pw_input]
+                        st.session_state['calendar_key'] = str(uuid.uuid4())
+                        st.rerun()
+                    else:
+                        st.error("잘못된 접속 코드입니다.")
     st.stop()
 
 # ==========================================
@@ -289,20 +285,27 @@ if 'company_name' not in st.session_state:
 COMPANY = st.session_state['company_name']
 
 with main_container.container():
+    # 상단 헤더
     st.title(f"🏢 {COMPANY}")
 
+    # 상태변수 초기화
     if 'show_sugg_form' not in st.session_state: st.session_state['show_sugg_form'] = False
     if 'show_attend_form' not in st.session_state: st.session_state['show_attend_form'] = False
 
     def toggle_sugg(): st.session_state['show_sugg_form'] = not st.session_state['show_sugg_form']
     def toggle_attend(): st.session_state['show_attend_form'] = not st.session_state['show_attend_form']
 
+    # ------------------------------------------------------------------
+    # [네비게이션] 앱 스타일 슬라이딩 메뉴
+    # ------------------------------------------------------------------
     tabs = ["📋 공지", "🗣️ 제안", "📆 근무표", "📅 근태신청", "⚙️ 관리자"]
-    selected_tab = st.radio("메뉴 선택", tabs, horizontal=True, label_visibility="collapsed")
+    selected_tab = st.radio("메뉴", tabs, horizontal=True, label_visibility="collapsed")
     
-    st.write("")
+    st.write("") # 간격
 
+    # ----------------------------------
     # 1. 공지사항
+    # ----------------------------------
     if selected_tab == "📋 공지":
         c_space, c_btn = st.columns([0.75, 0.25])
         with c_btn:
@@ -311,7 +314,8 @@ with main_container.container():
                 st.rerun()
         
         df = load_data("공지사항", COMPANY)
-        if df.empty: st.info("등록된 공지사항이 없습니다.")
+        if df.empty: 
+            st.info("등록된 공지사항이 없습니다.")
         else:
             for idx, row in df.iloc[::-1].iterrows():
                 is_imp = str(row.get("중요", "FALSE")).upper() == "TRUE"
@@ -334,12 +338,15 @@ with main_container.container():
                                 delete_row_by_index("공지사항", idx)
                                 st.success("삭제 완료"); tm.sleep(1); st.rerun()
 
+    # ----------------------------------
     # 2. 제안
+    # ----------------------------------
     elif selected_tab == "🗣️ 제안":
         if st.button("✍️ 제안 작성하기", on_click=toggle_sugg): pass
         
         if st.session_state['show_sugg_form']:
             with st.container(border=True):
+                st.write("**📝 제안 작성**")
                 with st.form("sugg_form", clear_on_submit=True):
                     c1, c2 = st.columns(2)
                     author = c1.text_input("작성자")
@@ -380,7 +387,9 @@ with main_container.container():
                                     delete_row_by_index("건의사항", idx)
                                     st.success("삭제 완료"); tm.sleep(1); st.rerun()
 
+    # ----------------------------------
     # 3. 근무표
+    # ----------------------------------
     elif selected_tab == "📆 근무표":
         c_space, c_btn, c_view = st.columns([0.55, 0.20, 0.25])
         with c_space: st.write("")
@@ -454,8 +463,6 @@ with main_container.container():
                 .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; font-weight: bold !important; }
                 .fc-day-sun .fc-daygrid-day-number { color: #FF4B4B !important; }
                 .fc-day-sun .fc-col-header-cell-cushion { color: #FF4B4B !important; }
-                .fc-day-sat .fc-daygrid-day-number { color: #1E90FF !important; }
-                .fc-day-sat .fc-col-header-cell-cushion { color: #1E90FF !important; }
             """
             cal = calendar(events=events, options={"initialView": "dayGridMonth", "height": 750}, key=st.session_state['calendar_key'], custom_css=calendar_css)
             
@@ -483,7 +490,9 @@ with main_container.container():
                 st.dataframe(list_df, column_config={"color": None, "extendedProps": None, "resourceId": None, "title": "내용", "start": "시작", "end": "종료"}, hide_index=True, use_container_width=True)
             else: st.info("등록된 일정이 없습니다.")
 
+    # ----------------------------------
     # 4. 근태신청
+    # ----------------------------------
     elif selected_tab == "📅 근태신청":
         st.write("### 📅 연차/근태 신청")
         if st.button("📝 신청서 작성", on_click=toggle_attend): pass
@@ -550,7 +559,9 @@ with main_container.container():
                         for _, r in my_df.iterrows(): st.info(f"{r['날짜및시간']} | {r['구분']} | {r['상태']}")
                 else: st.error("데이터가 없습니다.")
 
+    # ----------------------------------
     # 5. 관리자
+    # ----------------------------------
     elif selected_tab == "⚙️ 관리자":
         st.subheader("⚙️ 관리자 전용")
         if 'logged_in_manager' not in st.session_state:
@@ -669,7 +680,6 @@ with main_container.container():
                     c = st.text_area("내용")
                     is_imp = st.checkbox("중요 공지", value=False)
                     
-                    # [추가] 기간 선택 가능
                     d_range = st.date_input("날짜 (기간 선택 가능)", value=[datetime.now(KST).date()], help="기간을 선택하려면 시작일과 종료일을 클릭하세요.")
                     
                     is_holiday = False
@@ -695,17 +705,13 @@ with main_container.container():
                             save_schedule(COMPANY, final_date_str, final_title, c, manager_name)
                         st.success("등록 완료"); tm.sleep(1); st.rerun()
                 
-                # [추가] 등록된 일정 관리 (수정/삭제)
                 st.divider()
                 st.write("### 📋 등록된 일정 관리 (수정/삭제)")
                 df_sch = load_data("일정관리", COMPANY)
                 if not df_sch.empty:
                     for i, r in df_sch.iterrows():
-                        # 자신이 작성했거나 MASTER인 경우에만 관리 가능
                         if manager_id == "MASTER" or r['작성자'] == manager_name:
                             with st.expander(f"{r['날짜']} : {r['제목']}"):
-                                
-                                # 날짜 파싱 (단일 or 기간)
                                 existing_title = str(r['제목'])
                                 is_red = False
                                 clean_title = existing_title
@@ -725,14 +731,12 @@ with main_container.container():
                                 if c1.button("수정", key=f"upd_s_{i}"):
                                     final_t = new_title
                                     if new_is_red: final_t = f"[RED]{new_title}"
-                                    
-                                    # 날짜(2열), 제목(3열), 내용(4열)
                                     update_data_cell("일정관리", i, 2, new_date_str)
                                     update_data_cell("일정관리", i, 3, final_t)
                                     update_data_cell("일정관리", i, 4, new_content)
                                     st.success("수정됨"); tm.sleep(1); st.rerun()
                                     
-                                if c2.button("삭제", key=f"del_s_{i}"):
+                                if c2.button("삭제", key=f"del_s_{i}", type="secondary"):
                                     delete_row_by_index("일정관리", i)
                                     st.success("삭제됨"); tm.sleep(1); st.rerun()
 
