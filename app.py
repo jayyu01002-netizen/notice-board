@@ -11,7 +11,7 @@ import json
 import os
 import time
 
-# --- [설정] 페이지 기본 UI 설정 ---
+# --- [설정] 페이지 기본 UI 설정 (모바일 친화적) ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
 # --- [핵심] 잔상 제거용 메인 컨테이너 ---
@@ -34,73 +34,70 @@ COMPANIES = {
     "0645": "울산 제이유"
 }
 
-# --- [스타일] CSS (모바일 반응형 + 디자인 업그레이드) ---
+# --- [스타일] CSS (모바일 완벽 대응 + 깨진 아이콘 제거) ---
 st.markdown("""
 <style>
-    /* [1] 기본 폰트 설정 (너무 강제하지 않도록 수정하여 아이콘 깨짐 방지) */
-    .stMarkdown p { font-size: 18px; line-height: 1.6; }
-    div[data-testid="stMetricValue"] { font-size: 24px !important; color: #FF4B4B !important; }
-    
-    /* 달력 높이 고정 */
-    iframe[title="streamlit_calendar.calendar"] { height: 750px !important; min-height: 750px !important; }
+    /* [1] 모바일 전용 스타일 (화면폭 768px 이하) */
+    @media only screen and (max-width: 768px) {
+        /* 상단 여백 확 줄이기 */
+        .block-container {
+            padding-top: 1rem !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+        }
+        
+        /* 제목(커스텀 h2) 크기 강제 축소 및 한 줄 고정 */
+        .mobile-title {
+            font-size: 20px !important;
+            white-space: nowrap !important; /* 줄바꿈 금지 */
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            margin-bottom: 10px !important;
+        }
+        
+        /* 화살표 텍스트(아이콘 깨짐) 원천 차단: 사이드바 토글 영역 등 숨김 처리 시도 */
+        button[kind="header"] { display: none !important; }
+        .st-emotion-cache-16txtl3 { display: none !important; } /* 특정 버전 아이콘 클래스 숨김 */
+        
+        /* 탭 글씨 크기 조절 */
+        .stTabs [data-baseweb="tab"] {
+            font-size: 14px !important;
+            padding: 5px !important;
+        }
+    }
 
-    /* [2] 일반 버튼 스타일 (블루-퍼플 그라데이션 + 둥근 모서리) */
+    /* [2] 공통 버튼 스타일 (그라데이션) */
     div.stButton > button {
         width: 100%;
         background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
         color: white !important;
         border: none;
         border-radius: 12px;
-        padding: 0.6rem 1rem;
         font-weight: bold;
-        transition: all 0.3s ease;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
-    div.stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(0,0,0,0.2);
-        background: linear-gradient(90deg, #5b7cd7 0%, #283858 100%);
-    }
-
-    /* [3] 폼 제출 버튼 스타일 (그린 그라데이션) */
+    
+    /* [3] 폼 제출 버튼 (녹색 계열) */
     div[data-testid="stForm"] div.stButton > button {
         background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%);
-        color: white !important;
-        border: none;
-    }
-    div[data-testid="stForm"] div.stButton > button:hover {
-        background: linear-gradient(90deg, #15ab9e 0%, #48ff8d 100%);
-        box-shadow: 0 0 15px rgba(56, 239, 125, 0.4);
     }
 
-    /* [4] 입력창 스타일 */
-    .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
-        border-radius: 10px;
+    /* [4] 달력 평일 글씨 검정색 강제 */
+    .fc-daygrid-day-number, .fc-col-header-cell-cushion {
+        color: #000000 !important;
+        text-decoration: none !important;
     }
-
-    /* [5] 모바일 전용 반응형 스타일 (화면 폭 600px 이하일 때 적용) */
-    @media only screen and (max-width: 600px) {
-        /* 상단 여백 확보 및 패딩 조절 */
-        .block-container {
-            padding-top: 3rem !important;
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-        }
-        /* 제목 폰트 크기 줄임 */
-        h1 { font-size: 1.8rem !important; }
-        h2 { font-size: 1.5rem !important; }
-        h3 { font-size: 1.2rem !important; }
-        
-        /* 본문 폰트 크기 최적화 */
-        .stMarkdown p { font-size: 16px !important; }
-        
-        /* 버튼 꽉 차게 */
-        div.stButton > button { width: 100% !important; }
-    }
+    .fc-day-sun .fc-daygrid-day-number { color: #FF4B4B !important; }
+    .fc-day-sat .fc-daygrid-day-number { color: #1E90FF !important; }
+    
+    /* [5] 화살표 텍스트 깨짐 방지용 전역 숨김 (필요시) */
+    /* data-testid="stSidebarNav" 내부의 텍스트가 깨질 경우를 대비 */
+    [data-testid="stSidebarCollapsedControl"] { color: transparent !important; }
+    [data-testid="stSidebarCollapsedControl"]::before { content: "☰"; color: black; font-size: 20px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- [함수] 구글 시트 연결 공통 함수 ---
+# --- [함수] 구글 시트 연결 ---
 def get_client():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds_dict = st.secrets["gcp_service_account"]
@@ -119,8 +116,7 @@ def load_user_db():
         data = sheet.get_all_records()
         user_db = {str(row['이름']): str(row['비밀번호']) for row in data}
         return user_db
-    except Exception as e:
-        return {}
+    except: return {}
 
 def save_user_db(db):
     try:
@@ -129,8 +125,7 @@ def save_user_db(db):
         sheet.append_row(["이름", "비밀번호"])
         for name, pw in db.items():
             sheet.append_row([name, str(pw)])
-    except Exception as e:
-        st.error(f"DB 저장 오류: {e}")
+    except Exception as e: st.error(f"DB 오류: {e}")
 
 # --- [함수] 유틸리티 ---
 def get_korea_time():
@@ -222,7 +217,8 @@ def calculate_leave_usage(date_str, leave_type):
 # ==========================================
 if 'company_name' not in st.session_state:
     with main_container.container():
-        st.title("🏢 제이유 그룹 인트라넷")
+        # [수정] 모바일 제목 전용 HTML 사용
+        st.markdown('<h2 class="mobile-title">🏢 제이유 그룹 인트라넷</h2>', unsafe_allow_html=True)
         st.write("접속하려는 회사의 코드를 입력해주세요.")
         with st.form("login_form"):
             pw_input = st.text_input("회사 접속 코드", type="password")
@@ -248,7 +244,8 @@ if st.sidebar.button("로그아웃"):
     st.rerun()
 
 with main_container.container():
-    st.title(f"🏢 {COMPANY} 사내광장")
+    # [수정] st.title 대신 HTML 사용 (모바일 깨짐 방지 및 한줄 강제)
+    st.markdown(f'<h2 class="mobile-title">🏢 {COMPANY} 사내광장</h2>', unsafe_allow_html=True)
 
     if 'show_sugg_form' not in st.session_state: st.session_state['show_sugg_form'] = False
     if 'show_attend_form' not in st.session_state: st.session_state['show_attend_form'] = False
@@ -272,7 +269,7 @@ with main_container.container():
                     st.caption(f"📅 {row['작성일']}")
                     st.markdown(f"{row['내용']}")
 
-    # 2. 제안 (삭제 기능 추가)
+    # 2. 제안
     with tab2:
         if st.button("✍️ 제안 작성하기", on_click=toggle_sugg): pass
         if st.session_state['show_sugg_form']:
@@ -286,8 +283,8 @@ with main_container.container():
                     private = st.checkbox("🔒 비공개")
                     if st.form_submit_button("등록"):
                         save_suggestion(COMPANY, title, content, author, private, pw)
-                        st.success("✅ 제안 내용이 안전하게 등록되었습니다.")
-                        time.sleep(1.5)
+                        st.success("✅ 등록되었습니다.")
+                        time.sleep(1.2)
                         st.session_state['show_sugg_form']=False; st.rerun()
         st.divider()
         df_s = load_data("건의사항", COMPANY)
@@ -359,21 +356,8 @@ with main_container.container():
                 except: pass
 
         if view_type == "달력":
-            calendar_css = """
-                .fc { background: white !important; border-radius: 10px; padding: 10px; }
-                /* 기본 날짜/헤더 색상 (검정) */
-                .fc-daygrid-day-number, .fc-col-header-cell-cushion {
-                    color: #000000 !important; 
-                    font-weight: bold !important; 
-                    text-decoration: none !important; 
-                }
-                /* 일요일 빨강 */
-                .fc-day-sun .fc-daygrid-day-number, .fc-day-sun .fc-col-header-cell-cushion { color: #FF4B4B !important; }
-                /* 토요일 파랑 */
-                .fc-day-sat .fc-daygrid-day-number, .fc-day-sat .fc-col-header-cell-cushion { color: #1E90FF !important; }
-                .fc-event { cursor: pointer; }
-            """
-            cal = calendar(events=events, options={"initialView": "dayGridMonth", "height": 750}, key=st.session_state['calendar_key'], custom_css=calendar_css)
+            # 모바일 최적화 CSS 적용됨
+            cal = calendar(events=events, options={"initialView": "dayGridMonth", "height": 750}, key=st.session_state['calendar_key'])
             if cal.get("callback") == "eventClick":
                 evt = cal["eventClick"]["event"]
                 props = evt.get("extendedProps", {})
@@ -436,7 +420,7 @@ with main_container.container():
                         if not name or not pw: st.error("이름과 비밀번호를 입력해주세요.")
                         else:
                             save_attendance(COMPANY, name, type_val, final_date_str, reason, pw, approver)
-                            st.success(f"✅ {approver}님에게 승인 요청이 전송되었습니다.")
+                            st.success(f"✅ {approver}님에게 승인 요청되었습니다.")
                             time.sleep(1.5)
                             st.session_state['show_attend_form']=False; st.rerun()
         st.divider()
