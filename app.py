@@ -23,7 +23,7 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS 수정: 목록 안보임 해결 & 버튼 줄바꿈 방지
+# [스타일] CSS: 목록 안보임 해결 & 버튼 줄바꿈 방지 & 드롭다운 분리
 # =========================================================
 st.markdown("""
 <style>
@@ -38,7 +38,7 @@ st.markdown("""
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
     
-    /* [중요 수정] Expander(목록) 글씨 숨김 코드 삭제됨 - 이제 목록이 보입니다 */
+    /* [중요] Expander(목록) 글씨 숨김 코드 삭제됨 -> 이제 목록 잘 보입니다 */
     
     /* [3] 커스텀 네비게이션 (라디오 버튼) */
     div.row-widget.stRadio > div {
@@ -75,7 +75,7 @@ st.markdown("""
 
     /* [4] 일반 버튼 (새로고침 등) -> 줄바꿈 절대 방지 */
     div.stButton > button {
-        width: 100% !important;        /* 버튼이 컬럼에 꽉 차게 */
+        width: 100% !important;        
         padding: 0.3rem 0.5rem !important;
         font-size: 13px !important;
         border-radius: 6px !important;
@@ -121,9 +121,13 @@ st.markdown("""
 # =========================================================
 # [설정] 관리자 및 회사 정보
 # =========================================================
+# 1. 장안 제이유 관리자 목록
 JANGAN_FOREMEN = ["JK 조장", "JX 메인 조장", "JX 어퍼 조장", "MX5 조장", "피더 조장"]
 JANGAN_MID = ["반장"]
-ULSAN_APPROVERS = ["김대환", "김범진", "홍성곤"]
+
+# 2. 울산 제이유 관리자 목록
+ULSAN_APPROVERS = ["김대환", "김범진", "홍승곤"]
+
 ALL_MANAGERS = JANGAN_FOREMEN + JANGAN_MID + ULSAN_APPROVERS + ["MASTER"]
 
 COMPANIES = {
@@ -186,7 +190,7 @@ def load_data(sheet_name, company_name):
                 
         df = df.astype(str)
         
-        # [데이터 정리] 모든 문자열 컬럼의 앞뒤 공백 제거 (매칭 오류 방지)
+        # [데이터 안전장치] 공백 제거
         for col in df.columns:
             if df[col].dtype == object:
                 df[col] = df[col].str.strip()
@@ -208,7 +212,6 @@ def save_suggestion(company, title, content, author, is_private, password):
 
 def save_attendance(company, name, type_val, date_range_str, reason, password, approver):
     sheet = get_worksheet("근태신청")
-    # 회사별 초기 승인 상태 분기
     if company == "장안 제이유":
         initial_status = "1차승인대기" if approver in JANGAN_FOREMEN else "2차승인대기"
     else:
@@ -291,7 +294,6 @@ with main_container.container():
 
     # 1. 공지사항
     if selected_tab == "📋 공지":
-        # [수정] 버튼 공간 확보 (0.85 -> 0.75, 0.15 -> 0.25)
         c_space, c_btn = st.columns([0.75, 0.25])
         with c_btn:
             if st.button("🔄 새로고침", key="re_1"): 
@@ -350,7 +352,6 @@ with main_container.container():
 
     # 3. 근무표
     elif selected_tab == "📆 근무표":
-        # [수정] 버튼 공간 확보
         c_space, c_btn, c_view = st.columns([0.55, 0.20, 0.25])
         with c_space: st.write("")
         with c_btn:
@@ -444,14 +445,15 @@ with main_container.container():
         
         if st.session_state['show_attend_form']:
             with st.container(border=True):
-                date_mode = st.radio("기간 설정", ["반차/외출 (단일)", "기간 (연차/휴가)"], horizontal=True)
+                date_mode = st.radio("기간 설정", ["하루/반차/외출 (단일)", "기간 (연차/휴가)"], horizontal=True)
                 final_date_str = ""
                 if date_mode == "하루/반차/외출 (단일)":
                     st.write("**📆 일시 및 시간 선택 (단일)**")
                     dc1, dc2, dc3 = st.columns(3)
                     d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
                     t_start = dc2.time_input("시작 시간", value=time(9,0))
-                    t_end = dc3.time_input("종료 시간", value=time(7,0))
+                    # [수정] 기본값 17시로 변경
+                    t_end = dc3.time_input("종료 시간", value=time(17,0)) 
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
                 else:
                     st.write("**📆 기간 및 시간 선택 (연차/휴가)**")
@@ -463,7 +465,8 @@ with main_container.container():
                     with dc2:
                         st.caption("종료 일시")
                         d_end = st.date_input("종료일", value=datetime.now(KST))
-                        t_end = st.time_input("종료 시간", value=time(18,0))
+                        # [수정] 기본값 17시로 변경
+                        t_end = st.time_input("종료 시간", value=time(17,0))
                     if d_start > d_end: st.error("⚠️ 종료일이 시작일보다 빠릅니다.")
                     else: final_date_str = f"{d_start} {t_start.strftime('%H:%M')} ~ {d_end} {t_end.strftime('%H:%M')}"
                 
@@ -475,6 +478,7 @@ with main_container.container():
                     pw = c2.text_input("비밀번호(본인확인용)", type="password")
                     type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근"])
                     
+                    # 회사별 승인자 분기 처리
                     if COMPANY == "장안 제이유":
                         approver_options = JANGAN_FOREMEN + JANGAN_MID
                     else:
@@ -508,7 +512,17 @@ with main_container.container():
         st.subheader("⚙️ 관리자 전용")
         if 'logged_in_manager' not in st.session_state:
             user_db = load_user_db()
-            selected_name = st.selectbox("관리자 선택", ["선택안함"] + ALL_MANAGERS)
+            
+            # [핵심 수정] 관리자 목록 분기 처리 (회사별로 다른 목록 보여주기)
+            if COMPANY == "장안 제이유":
+                # 장안: 조장 + 반장 + MASTER
+                manager_options = ["선택안함"] + JANGAN_FOREMEN + JANGAN_MID + ["MASTER"]
+            else:
+                # 울산: 김대환, 김범진, 홍승곤 + MASTER
+                manager_options = ["선택안함"] + ULSAN_APPROVERS + ["MASTER"]
+
+            selected_name = st.selectbox("관리자 선택", manager_options)
+            
             if selected_name != "선택안함":
                 if selected_name not in user_db:
                     st.warning(f"🔒 '{selected_name}' 초기 비밀번호 설정")
@@ -541,7 +555,7 @@ with main_container.container():
             manager_id = st.session_state['logged_in_manager']
             manager_name = manager_id
             
-            # [수정] 로그아웃 버튼 공간 확보 (0.75:0.25)
+            # 로그아웃 버튼 공간 확보
             c_info, c_logout = st.columns([0.75, 0.25])
             with c_info:
                 st.success(f"👋 접속중: {manager_name}")
