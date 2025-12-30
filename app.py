@@ -23,29 +23,23 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 오류 해결 (아이콘 깨짐 방지 + 스크롤바 숨김)
+# [스타일] CSS: 디자인 유지 + 달력 요일 색상 복구
 # =========================================================
 st.markdown("""
 <style>
-    /* [1] 전체 테마 강제 설정 (라이트 모드 고정) */
+    /* [1] 전체 배경 및 기본 텍스트 설정 */
     .stApp {
         background-color: #ffffff !important;
         color: #333333 !important;
     }
-
-    /* [중요] 폰트 적용 대상 제한 (아이콘 깨짐 방지) */
-    /* 모든 요소에 폰트를 적용하면 아이콘이 깨지므로, 텍스트 요소에만 적용 */
-    h1, h2, h3, h4, h5, h6, p, li, input, textarea, button {
-        font-family: 'Pretendard', sans-serif !important;
+    
+    h1, h2, h3, h4, h5, h6, p, li, label, button, input, textarea {
+        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif !important;
         color: #333333 !important;
     }
 
-    /* [2] 모바일 상단 여백 (제목 잘림 방지) */
-    h1 { 
-        padding-top: 1rem !important; 
-        font-size: 1.8rem !important; 
-        font-weight: 800 !important;
-    }
+    /* [2] 모바일 상단 여백 확보 */
+    h1 { padding-top: 1rem !important; }
     @media (max-width: 640px) {
         h1 { margin-top: 3rem !important; font-size: 1.5rem !important; }
         .block-container { padding-top: 6rem !important; } 
@@ -55,10 +49,7 @@ st.markdown("""
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
     
-    /* ================================================================
-       [4] ★ 앱 스타일 슬라이드 탭 (스크롤바 숨김 + 터치 슬라이드) ★ 
-       ================================================================
-    */
+    /* [4] 슬라이드 탭 메뉴 */
     [data-testid="stRadio"] > div {
         display: flex;
         flex-direction: row;
@@ -66,21 +57,15 @@ st.markdown("""
         overflow-x: auto;
         gap: 0px;
         background: white !important;
-        border-bottom: 2px solid #f3f4f6;
+        border-bottom: 2px solid #f0f0f0;
         padding-bottom: 0px !important;
         margin-bottom: 15px;
         -webkit-overflow-scrolling: touch;
-        
-        /* [핵심 수정] 스크롤바 숨기기 */
-        -ms-overflow-style: none;  /* IE and Edge */
-        scrollbar-width: none;  /* Firefox */
+        -ms-overflow-style: none;
+        scrollbar-width: none;
     }
-    /* 크롬, 사파리, 오페라 스크롤바 숨기기 */
-    [data-testid="stRadio"] > div::-webkit-scrollbar {
-        display: none;
-    }
+    [data-testid="stRadio"] > div::-webkit-scrollbar { display: none; }
 
-    /* 개별 메뉴 아이템 (라벨) */
     [data-testid="stRadio"] label {
         background-color: transparent !important;
         border: none !important;
@@ -92,18 +77,15 @@ st.markdown("""
         min-width: fit-content;
         border-bottom: 3px solid transparent !important;
     }
-
-    /* 라디오 버튼 동그라미 숨김 */
+    
     [data-testid="stRadio"] label > div:first-child { display: none !important; }
     
-    /* 텍스트 스타일 (기본) */
     [data-testid="stRadio"] label p {
-        color: #9ca3af !important; 
+        color: #999999 !important; 
         font-weight: 600 !important;
         font-size: 16px !important;
     }
     
-    /* 선택된 탭 스타일 */
     [data-testid="stRadio"] label:has(input:checked) {
         border-bottom: 3px solid #ef4444 !important; 
     }
@@ -116,15 +98,19 @@ st.markdown("""
     .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
         background-color: #ffffff !important;
         color: #333333 !important;
-        border: 1px solid #e5e7eb !important;
-        border-radius: 8px;
+        border: 1px solid #e0e0e0 !important;
+        border-radius: 8px !important;
     }
-    /* 팝업 메뉴 (다크모드 오류 방지) */
-    div[data-baseweb="popover"], div[data-baseweb="menu"] {
+    div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-testid="stSelectboxVirtualDropdown"] {
+        background-color: #ffffff !important;
+        border: 1px solid #e0e0e0 !important;
+    }
+    div[data-baseweb="popover"] li, div[data-baseweb="menu"] div {
+        color: #333333 !important;
         background-color: #ffffff !important;
     }
-    div[data-baseweb="popover"] div, div[data-baseweb="menu"] div {
-        color: #333333 !important;
+    div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] div:hover {
+        background-color: #f0f0f0 !important;
     }
 
     div.stButton > button {
@@ -132,31 +118,36 @@ st.markdown("""
         border-radius: 8px !important;
         font-weight: 600 !important;
         border: 1px solid #e5e7eb !important;
-        background-color: #f9fafb !important;
-        color: #374151 !important;
+        background-color: #f9f9f9 !important;
+        color: #333333 !important;
         padding: 0.6rem !important;
         box-shadow: none !important;
     }
-    /* 중요 버튼 (빨강) */
-    div[data-testid="stForm"] div.stButton > button,
+    div[data-testid="stForm"] div.stButton > button, 
     div[data-testid="column"] button[kind="secondary"] {
         background: #ef4444 !important; 
         color: white !important;
         border: none !important;
     }
 
-    /* [6] Expander 헤더 (화살표 텍스트 흐름 해결) */
+    /* [6] Expander 헤더 */
+    .streamlit-expanderHeader {
+        background-color: white !important;
+        color: #333333 !important;
+        border: 1px solid #f0f0f0 !important;
+        border-radius: 8px !important;
+    }
     .streamlit-expanderHeader p {
         font-size: 15px !important;
         font-weight: 600 !important;
         color: #333333 !important;
     }
-    /* 아이콘 색상 강제 지정 */
     .streamlit-expanderHeader svg {
         fill: #333333 !important;
+        stroke: #333333 !important;
     }
 
-    /* [7] 달력 스타일 */
+    /* [7] 달력 기본 스타일 */
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
     .fc-toolbar-title { color: #1f2937 !important; }
     .fc-button { color: #374151 !important; border: 1px solid #e5e7eb !important; }
@@ -486,12 +477,23 @@ with main_container.container():
                 except: pass
 
         if view_type == "달력":
+            # [핵심] 달력 CSS: 기본 검정 글씨 + 토요일(파랑) + 일요일(빨강)
             calendar_css = """
                 .fc { background: white !important; }
-                .fc-toolbar-title { color: #1f2937 !important; font-weight: bold !important; font-size: 1.5rem !important; }
-                .fc-button { color: #374151 !important; border: 1px solid #e5e7eb !important; }
-                .fc-daygrid-day-number { color: #1f2937 !important; text-decoration: none !important; }
-                .fc-col-header-cell-cushion { color: #1f2937 !important; text-decoration: none !important; font-weight: bold !important; }
+                .fc-toolbar-title { color: #333333 !important; font-weight: bold !important; font-size: 1.5rem !important; }
+                .fc-button { color: #333333 !important; border: 1px solid #e5e7eb !important; }
+                
+                /* 기본 날짜 글씨 (검정) */
+                .fc-daygrid-day-number { color: #333333 !important; text-decoration: none !important; }
+                .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; font-weight: bold !important; }
+                
+                /* 일요일 (빨강) */
+                .fc-day-sun .fc-daygrid-day-number, 
+                .fc-day-sun .fc-col-header-cell-cushion { color: #EF4444 !important; }
+                
+                /* 토요일 (파랑) */
+                .fc-day-sat .fc-daygrid-day-number, 
+                .fc-day-sat .fc-col-header-cell-cushion { color: #3B82F6 !important; }
             """
             cal = calendar(events=events, options={"initialView": "dayGridMonth", "height": 750}, key=st.session_state['calendar_key'], custom_css=calendar_css)
             
@@ -678,8 +680,9 @@ with main_container.container():
                     if pend.empty: st.info("대기중인 건이 없습니다.")
                     else:
                         for i, r in pend.iterrows():
-                            # Expander 내부 텍스트 흐름 문제 해결을 위한 내용 표시 방식
-                            with st.expander(f"[{r['이름']}] {r['구분']} - {r['날짜및시간']}"):
+                            # Expander 제목 흐름 방지 (아이콘 제거 대신 텍스트로 처리)
+                            title_text = f"{r['날짜']} : {r['제목']}" if '제목' in r else f"{r['날짜및시간']} - {r['이름']}"
+                            with st.expander(title_text):
                                 st.write(f"사유: {r['사유']}")
                                 c_app, c_rej = st.columns(2)
                                 if c_app.button("승인", key=f"app_{i}"):
@@ -739,7 +742,7 @@ with main_container.container():
                 if not df_sch.empty:
                     for i, r in df_sch.iterrows():
                         if manager_id == "MASTER" or r['작성자'] == manager_name:
-                            # Expander 제목 흐름 방지 (아이콘 제거 대신 텍스트로 처리)
+                            # Expander 제목 흐름 방지
                             title_text = f"{r['날짜']} : {r['제목']}"
                             with st.expander(title_text):
                                 existing_title = str(r['제목'])
