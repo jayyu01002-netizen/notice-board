@@ -283,13 +283,16 @@ with main_container.container():
             else:
                 st.info("등록된 일정이 없습니다.")
 
-    # 4. 근태신청 (수정된 부분)
+    # 4. 근태신청 (수정된 부분: 라디오버튼을 폼 밖으로 이동)
     with tab4:
         st.write("### 📅 연차/근태 신청")
         if st.button("📝 신청서 작성", on_click=toggle_attend): pass
         
         if st.session_state['show_attend_form']:
             with st.container(border=True):
+                # [중요 수정] 라디오 버튼을 form 밖으로 뺐습니다. 이제 클릭 즉시 UI가 바뀝니다.
+                date_mode = st.radio("기간 설정", ["하루/반차/외출 (단일)", "기간 (연차/휴가)"], horizontal=True)
+                
                 with st.form("att_form"):
                     c1, c2 = st.columns(2)
                     name = c1.text_input("이름")
@@ -300,7 +303,6 @@ with main_container.container():
                     
                     st.markdown("---")
                     
-                    date_mode = st.radio("기간 설정", ["하루/반차/외출 (단일)", "기간 (연차/휴가)"], horizontal=True)
                     final_date_str = ""
                     
                     if date_mode == "하루/반차/외출 (단일)":
@@ -311,7 +313,7 @@ with main_container.container():
                         t_end = dc3.time_input("종료 시간", value=time(18,0))
                         final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
                     else:
-                        # [수정 완료] 기간 선택 시에도 시작 시간 / 종료 시간을 선택할 수 있게 변경
+                        # [확인] 기간 선택 시: 시작일/시간 + 종료일/시간 모두 표시
                         st.write("**📆 기간 및 시간 선택 (연차/휴가)**")
                         dc1, dc2 = st.columns(2)
                         with dc1:
