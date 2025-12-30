@@ -123,7 +123,7 @@ st.markdown("""
 # =========================================================
 JANGAN_FOREMEN = ["JK 조장", "JX 메인 조장", "JX 어퍼 조장", "MX5 조장", "피더 조장"]
 JANGAN_MID = ["반장"]
-ULSAN_APPROVERS = ["김대환", "김범진", "홍승곤"]
+ULSAN_APPROVERS = ["김대환", "김범진", "홍성곤"]
 ALL_MANAGERS = JANGAN_FOREMEN + JANGAN_MID + ULSAN_APPROVERS + ["MASTER"]
 
 COMPANIES = {
@@ -440,9 +440,9 @@ with main_container.container():
         
         if st.session_state['show_attend_form']:
             with st.container(border=True):
-                date_mode = st.radio("기간 설정", ["하루/반차/외출 (단일)", "기간 (연차/휴가)"], horizontal=True)
+                date_mode = st.radio("기간 설정", ["반차/외출/병가 (단일)", "기간 (연차/휴가)"], horizontal=True)
                 final_date_str = ""
-                if date_mode == "하루/반차/외출 (단일)":
+                if date_mode == "반차/외출/병가 (단일)":
                     st.write("**📆 일시 및 시간 선택 (단일)**")
                     dc1, dc2, dc3 = st.columns(3)
                     d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
@@ -512,7 +512,7 @@ with main_container.container():
                 # 장안: 조장 + 반장 + MASTER
                 manager_options = ["선택안함"] + JANGAN_FOREMEN + JANGAN_MID + ["MASTER"]
             else:
-                # 울산: 김대환, 김범진, 홍승곤 + MASTER
+                # 울산: 김대환, 김범진, 홍성곤 + MASTER
                 manager_options = ["선택안함"] + ULSAN_APPROVERS + ["MASTER"]
 
             selected_name = st.selectbox("관리자 선택", manager_options)
