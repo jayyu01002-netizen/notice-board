@@ -23,24 +23,25 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 앱 스타일 슬라이드 메뉴 & 전체 디자인 리뉴얼
+# [스타일] CSS: 앱 스타일 슬라이드 탭 & 다크모드 방어
 # =========================================================
 st.markdown("""
 <style>
-    /* [1] 폰트 및 기본 배경 */
+    /* [1] 전체 테마 강제 설정 (흰 배경 + 검정 글씨) */
     .stApp {
-        background-color: #ffffff; /* 전체 흰색 배경으로 깔끔하게 */
-        font-family: 'Pretendard', sans-serif;
+        background-color: #ffffff !important;
+    }
+    h1, h2, h3, h4, h5, h6, p, span, div, label, li, .stMarkdown {
+        color: #333333 !important;
+        font-family: 'Pretendard', sans-serif !important;
     }
 
-    /* [2] 상단 여백 (모바일 주소창 가림 방지) */
+    /* [2] 모바일 상단 여백 (제목 잘림 방지) */
     h1 { 
         padding-top: 1rem !important; 
         font-size: 1.8rem !important; 
         font-weight: 800 !important;
-        color: #111827;
     }
-    
     @media (max-width: 640px) {
         h1 { margin-top: 3rem !important; font-size: 1.5rem !important; }
         .block-container { padding-top: 6rem !important; } 
@@ -50,77 +51,81 @@ st.markdown("""
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
     
-    /* [4] ★ 핵심: 슬라이드 탭 메뉴 디자인 (요청하신 스타일) ★ */
+    /* ================================================================
+       [4] ★ 핵심: 앱 스타일 슬라이드 탭 메뉴 (Red Underline) ★ 
+       ================================================================
+    */
+    /* 라디오 버튼 컨테이너를 가로 스크롤 탭바로 변신 */
     div.row-widget.stRadio > div {
-        background: transparent !important; /* 배경 투명 */
-        border: none !important;
-        box-shadow: none !important;
+        flex-direction: row;
+        justify-content: flex-start; /* 왼쪽 정렬 */
         gap: 0px !important;
-        border-bottom: 2px solid #f3f4f6; /* 하단에 얇은 회색 줄 */
-        padding-bottom: 0px !important;
-        overflow-x: auto; /* 모바일 가로 스크롤 허용 */
-        flex-wrap: nowrap;
-        -webkit-overflow-scrolling: touch; /* 부드러운 스크롤 */
+        background: transparent !important;
+        padding: 0px !important;
+        border-bottom: 2px solid #f0f0f0; /* 탭 하단 전체 회색 라인 */
+        overflow-x: auto; /* 가로 스크롤 허용 */
+        flex-wrap: nowrap; /* 줄바꿈 금지 */
+        -webkit-overflow-scrolling: touch; /* 모바일 부드러운 스크롤 */
     }
     
-    /* 탭 버튼 기본 스타일 */
+    /* 개별 탭 버튼 (기본 상태) */
     div.row-widget.stRadio > div > label {
-        background: transparent !important;
+        background-color: transparent !important;
         border: none !important;
         box-shadow: none !important;
-        color: #9ca3af !important; /* 선택 안된 글자: 회색 */
+        color: #999999 !important; /* 선택 안된 글씨: 연한 회색 */
         font-weight: 600 !important;
-        font-size: 15px !important;
-        padding: 10px 15px !important;
+        font-size: 16px !important;
+        padding: 12px 16px !important; /* 터치하기 좋은 크기 */
         margin: 0 !important;
-        border-radius: 0 !important; /* 둥근 모서리 제거 */
-        transition: all 0.2s ease;
-        white-space: nowrap;
+        border-radius: 0 !important;
+        white-space: nowrap; /* 글자 줄바꿈 방지 */
+        transition: all 0.2s ease-in-out;
+        border-bottom: 2px solid transparent !important; /* 밑줄 공간 확보 */
     }
     
-    /* 선택된 탭 스타일 (빨간 밑줄 + 진한 글씨) */
+    /* 개별 탭 버튼 (선택된 상태) */
     div.row-widget.stRadio > div > label[data-checked="true"] {
-        color: #ef4444 !important; /* 붉은색 글씨 */
-        border-bottom: 3px solid #ef4444 !important; /* 붉은색 밑줄 */
+        color: #ff4b4b !important; /* 선택된 글씨: 빨간색 */
+        border-bottom: 2px solid #ff4b4b !important; /* 선택된 밑줄: 빨간색 */
+        background-color: transparent !important;
         opacity: 1 !important;
     }
     
-    /* 라디오 버튼 원형 숨김 */
+    /* 라디오 버튼의 동그라미 숨김 */
     div.row-widget.stRadio div[role="radiogroup"] > label > div:first-child {
         display: none !important;
     }
 
-    /* [5] 버튼 디자인 (심플하게) */
+    /* [5] 버튼 및 입력창 디자인 (심플) */
     div.stButton > button {
         width: 100% !important;        
         border-radius: 8px !important;
         font-weight: 600 !important;
-        border: 1px solid #e5e7eb !important;
-        background-color: #f9fafb !important;
-        color: #374151 !important;
-        box-shadow: none !important;
-        padding: 0.5rem !important;
+        border: 1px solid #e0e0e0 !important;
+        background-color: #f9f9f9 !important;
+        color: #333333 !important;
+        padding: 0.6rem !important;
     }
-    /* 중요 버튼 (등록/신청 등) */
+    /* 중요 버튼 (등록 등) - 빨간색 포인트 */
     div[data-testid="stForm"] div.stButton > button {
-        background: #ef4444 !important; /* 포인트 컬러 (Red) */
+        background: #ff4b4b !important; 
         color: white !important;
         border: none !important;
     }
     
-    /* [6] 입력창 디자인 */
+    /* 입력창 스타일 */
     .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
+        background-color: #ffffff !important;
+        color: #333333 !important;
+        border: 1px solid #e0e0e0 !important;
         border-radius: 8px;
-        border: 1px solid #e5e7eb;
-        background-color: #ffffff;
     }
 
-    /* [7] 달력 스타일 (글씨 검정색 강제) */
+    /* [6] 달력 스타일 (글씨 안보임 해결) */
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
-    .fc-toolbar-title { color: #111827 !important; font-weight: 800 !important; }
+    .fc-toolbar-title { color: #333333 !important; }
     .fc-button { color: #333333 !important; border: 1px solid #ddd !important; }
-    .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; }
-    .fc-daygrid-day-number { color: #333333 !important; text-decoration: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -285,10 +290,8 @@ if 'company_name' not in st.session_state:
 COMPANY = st.session_state['company_name']
 
 with main_container.container():
-    # 상단 헤더
     st.title(f"🏢 {COMPANY}")
 
-    # 상태변수 초기화
     if 'show_sugg_form' not in st.session_state: st.session_state['show_sugg_form'] = False
     if 'show_attend_form' not in st.session_state: st.session_state['show_attend_form'] = False
 
@@ -296,16 +299,14 @@ with main_container.container():
     def toggle_attend(): st.session_state['show_attend_form'] = not st.session_state['show_attend_form']
 
     # ------------------------------------------------------------------
-    # [네비게이션] 앱 스타일 슬라이딩 메뉴
+    # [네비게이션] 슬라이드 탭 스타일 적용
     # ------------------------------------------------------------------
     tabs = ["📋 공지", "🗣️ 제안", "📆 근무표", "📅 근태신청", "⚙️ 관리자"]
     selected_tab = st.radio("메뉴", tabs, horizontal=True, label_visibility="collapsed")
     
     st.write("") # 간격
 
-    # ----------------------------------
     # 1. 공지사항
-    # ----------------------------------
     if selected_tab == "📋 공지":
         c_space, c_btn = st.columns([0.75, 0.25])
         with c_btn:
@@ -338,9 +339,7 @@ with main_container.container():
                                 delete_row_by_index("공지사항", idx)
                                 st.success("삭제 완료"); tm.sleep(1); st.rerun()
 
-    # ----------------------------------
     # 2. 제안
-    # ----------------------------------
     elif selected_tab == "🗣️ 제안":
         if st.button("✍️ 제안 작성하기", on_click=toggle_sugg): pass
         
@@ -387,9 +386,7 @@ with main_container.container():
                                     delete_row_by_index("건의사항", idx)
                                     st.success("삭제 완료"); tm.sleep(1); st.rerun()
 
-    # ----------------------------------
     # 3. 근무표
-    # ----------------------------------
     elif selected_tab == "📆 근무표":
         c_space, c_btn, c_view = st.columns([0.55, 0.20, 0.25])
         with c_space: st.write("")
@@ -422,10 +419,10 @@ with main_container.container():
                 title_text = str(r['제목'])
                 
                 if title_text.startswith("[RED]"):
-                    evt_color = "#FF4B4B" 
+                    evt_color = "#EF4444" 
                     title_text = title_text.replace("[RED]", "")
                 elif title_text.startswith("[휴무]"): 
-                    evt_color = "#FF4B4B"
+                    evt_color = "#EF4444"
 
                 events.append({"title": f"📢 {title_text}", "start": start, "end": end, "color": evt_color, "extendedProps": {"content": r['내용'], "type": "schedule"}})
 
@@ -446,7 +443,7 @@ with main_container.container():
                             end_d = end_obj.strftime("%Y-%m-%d")
                         else: end_d = start_d
                     l_type = r['구분']
-                    col = "#D9534F" if "연차" in l_type else "#0275D8"
+                    col = "#3b82f6" if "연차" in l_type else "#ef4444"
                     events.append({
                         "title": f"[{r['이름']}] {l_type}", 
                         "start": start_d, "end": end_d, "color": col,
@@ -461,8 +458,6 @@ with main_container.container():
                 .fc-button { color: #333333 !important; border: 1px solid #ddd !important; }
                 .fc-daygrid-day-number { color: #333333 !important; text-decoration: none !important; }
                 .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; font-weight: bold !important; }
-                .fc-day-sun .fc-daygrid-day-number { color: #FF4B4B !important; }
-                .fc-day-sun .fc-col-header-cell-cushion { color: #FF4B4B !important; }
             """
             cal = calendar(events=events, options={"initialView": "dayGridMonth", "height": 750}, key=st.session_state['calendar_key'], custom_css=calendar_css)
             
@@ -490,9 +485,7 @@ with main_container.container():
                 st.dataframe(list_df, column_config={"color": None, "extendedProps": None, "resourceId": None, "title": "내용", "start": "시작", "end": "종료"}, hide_index=True, use_container_width=True)
             else: st.info("등록된 일정이 없습니다.")
 
-    # ----------------------------------
     # 4. 근태신청
-    # ----------------------------------
     elif selected_tab == "📅 근태신청":
         st.write("### 📅 연차/근태 신청")
         if st.button("📝 신청서 작성", on_click=toggle_attend): pass
@@ -559,9 +552,7 @@ with main_container.container():
                         for _, r in my_df.iterrows(): st.info(f"{r['날짜및시간']} | {r['구분']} | {r['상태']}")
                 else: st.error("데이터가 없습니다.")
 
-    # ----------------------------------
     # 5. 관리자
-    # ----------------------------------
     elif selected_tab == "⚙️ 관리자":
         st.subheader("⚙️ 관리자 전용")
         if 'logged_in_manager' not in st.session_state:
