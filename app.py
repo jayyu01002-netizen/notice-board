@@ -13,6 +13,9 @@ import time
 
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
+st.markdown("""
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+""", unsafe_allow_html=True)
 
 # --- [핵심] 잔상 제거용 메인 컨테이너 ---
 main_container = st.empty()
@@ -558,3 +561,4 @@ with main_container.container():
                         st.dataframe(pivot)
                     else: st.info("집계할 데이터 없음")
                 else: st.info("데이터 없음")
+            
