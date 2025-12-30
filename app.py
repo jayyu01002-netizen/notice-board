@@ -34,11 +34,15 @@ COMPANIES = {
     "0645": "울산 제이유"
 }
 
-# --- [스타일] CSS (디자인 대폭 업그레이드) ---
+# --- [스타일] CSS (수정됨: 디자인 유지 + 아이콘 오류 해결) ---
 st.markdown("""
 <style>
-    /* 전체 폰트 및 배경 설정 */
-    div[data-testid="stMarkdownContainer"] p { font-size: 18px !important; line-height: 1.6; }
+    /* 전체 폰트 및 배경 설정 - !important 제거로 아이콘 깨짐 방지 */
+    div[data-testid="stMarkdownContainer"] p { 
+        font-size: 18px; 
+        line-height: 1.6; 
+    }
+    
     div[data-testid="stMetricValue"] { font-size: 24px !important; color: #FF4B4B !important; }
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; min-height: 750px !important; }
 
