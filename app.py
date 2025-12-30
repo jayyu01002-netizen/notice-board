@@ -2,16 +2,14 @@ import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime, timedelta
-# [유지] 캘린더 충돌 방지용 임포트
-from datetime import time as dt_time 
-import time as tm 
+from datetime import datetime, time, timedelta
 import uuid
 import pytz
 import holidays
 from streamlit_calendar import calendar
 import json
 import os
+import time
 
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
@@ -36,86 +34,16 @@ COMPANIES = {
     "0645": "울산 제이유"
 }
 
-# --- [스타일] CSS (깨진 글씨 강제 삭제 및 상하단 제거) ---
+# --- [스타일] CSS ---
 st.markdown("""
 <style>
-    /* [1] 상단 헤더(Streamlit 로고 등) 완전 삭제 */
-    header[data-testid="stHeader"] {
-        display: none !important;
-    }
-    footer {
-        display: none !important;
-    }
-
-    /* [2] 모바일 화면 최적화 및 깨진 글씨 삭제 */
-    @media only screen and (max-width: 768px) {
-        .block-container {
-            padding-top: 0rem !important; /* 헤더 없앴으니 여백도 삭제 */
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
-        }
-        
-        /* [사이드바 버튼] 깨진 텍스트 숨기기 */
-        [data-testid="stSidebarCollapsedControl"] {
-            color: transparent !important;
-            width: 50px !important;
-        }
-        /* [사이드바 버튼] 햄버거 아이콘 덮어쓰기 */
-        [data-testid="stSidebarCollapsedControl"]::after {
-            content: "☰"; 
-            color: black;
-            font-size: 28px !important;
-            position: absolute;
-            top: 5px;
-            left: 5px;
-        }
-
-        /* 제목 글자 크기 최적화 */
-        h2 { font-size: 1.3rem !important; margin-top: 10px !important; }
-    }
-
-    /* [3] (중요) 드롭다운/Selectbox 화살표 텍스트 깨짐 강제 삭제 */
-    /* Selectbox 내부의 아이콘 컨테이너를 타겟팅하여 숨김 */
-    div[data-baseweb="select"] > div:last-child {
-        color: transparent !important;
-        font-size: 0px !important; /* 글자 크기 0으로 만듦 */
-        width: 0px !important;
-    }
-    /* 혹시 모를 SVG 텍스트 대체 */
-    div[data-baseweb="select"] i, 
-    div[data-baseweb="select"] span {
-        display: none !important;
-    }
-
-    /* [4] 버튼 디자인 */
-    div.stButton > button {
-        width: 100%;
-        background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
-        color: white !important;
-        border: none;
-        border-radius: 12px;
-        font-weight: bold;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-
-    /* [5] 캘린더 스타일 */
-    .fc { background: white !important; border-radius: 10px; padding: 5px; }
-    .fc-daygrid-day-number, .fc-col-header-cell-cushion {
-        color: #000000 !important; 
-        font-weight: bold !important; 
-        text-decoration: none !important; 
-    }
-    .fc-day-sun .fc-daygrid-day-number, .fc-day-sun .fc-col-header-cell-cushion { color: #FF4B4B !important; }
-    .fc-day-sat .fc-daygrid-day-number, .fc-day-sat .fc-col-header-cell-cushion { color: #1E90FF !important; }
-    
-    /* [6] 입력창 스타일 */
-    .stTextInput input, .stSelectbox div, .stDateInput input, .stTimeInput input {
-        border-radius: 8px !important;
-    }
+    div[data-testid="stMarkdownContainer"] p { font-size: 18px !important; line-height: 1.6; }
+    div[data-testid="stMetricValue"] { font-size: 24px !important; color: #FF4B4B !important; }
+    iframe[title="streamlit_calendar.calendar"] { height: 750px !important; min-height: 750px !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- [함수] 구글 시트 연결 ---
+# --- [함수] 구글 시트 연결 공통 함수 ---
 def get_client():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds_dict = st.secrets["gcp_service_account"]
@@ -134,7 +62,8 @@ def load_user_db():
         data = sheet.get_all_records()
         user_db = {str(row['이름']): str(row['비밀번호']) for row in data}
         return user_db
-    except: return {}
+    except Exception as e:
+        return {}
 
 def save_user_db(db):
     try:
@@ -143,7 +72,8 @@ def save_user_db(db):
         sheet.append_row(["이름", "비밀번호"])
         for name, pw in db.items():
             sheet.append_row([name, str(pw)])
-    except Exception as e: st.error(f"DB 오류: {e}")
+    except Exception as e:
+        st.error(f"DB 저장 오류: {e}")
 
 # --- [함수] 유틸리티 ---
 def get_korea_time():
@@ -199,8 +129,10 @@ def update_attendance_step(sheet_name, row_idx, new_status, next_approver=None):
     if next_approver: sheet.update_cell(row_idx + 2, 9, next_approver)
     st.cache_data.clear()
 
+# [추가] 행 삭제 기능 (제안 삭제용)
 def delete_row_by_index(sheet_name, row_idx):
     sheet = get_worksheet(sheet_name)
+    # 데이터프레임 인덱스(0부터 시작) + 2 (헤더 1줄 + 1-based index)
     sheet.delete_rows(row_idx + 2)
     st.cache_data.clear()
 
@@ -235,7 +167,7 @@ def calculate_leave_usage(date_str, leave_type):
 # ==========================================
 if 'company_name' not in st.session_state:
     with main_container.container():
-        st.markdown('<h2 style="text-align:center;">🏢 제이유 그룹 인트라넷</h2>', unsafe_allow_html=True)
+        st.title("🏢 제이유 그룹 인트라넷")
         st.write("접속하려는 회사의 코드를 입력해주세요.")
         with st.form("login_form"):
             pw_input = st.text_input("회사 접속 코드", type="password")
@@ -261,7 +193,7 @@ if st.sidebar.button("로그아웃"):
     st.rerun()
 
 with main_container.container():
-    st.markdown(f'<h3 style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">🏢 {COMPANY} 사내광장</h3>', unsafe_allow_html=True)
+    st.title(f"🏢 {COMPANY} 사내광장")
 
     if 'show_sugg_form' not in st.session_state: st.session_state['show_sugg_form'] = False
     if 'show_attend_form' not in st.session_state: st.session_state['show_attend_form'] = False
@@ -285,7 +217,7 @@ with main_container.container():
                     st.caption(f"📅 {row['작성일']}")
                     st.markdown(f"{row['내용']}")
 
-    # 2. 제안
+    # 2. 제안 (삭제 기능 추가)
     with tab2:
         if st.button("✍️ 제안 작성하기", on_click=toggle_sugg): pass
         if st.session_state['show_sugg_form']:
@@ -300,25 +232,38 @@ with main_container.container():
                     if st.form_submit_button("등록"):
                         save_suggestion(COMPANY, title, content, author, private, pw)
                         st.success("✅ 제안 내용이 안전하게 등록되었습니다.")
-                        tm.sleep(1.2)
+                        time.sleep(1.5)
                         st.session_state['show_sugg_form']=False; st.rerun()
         st.divider()
         df_s = load_data("건의사항", COMPANY)
         if not df_s.empty:
             for idx, row in df_s.iloc[::-1].iterrows():
+                # 비공개 글은 본인(비밀번호 알 경우) 외엔 안 보이지만, 관리자는 다 볼 수 있게 할 수도 있음.
+                # 현재는 비공개 로직 유지하되, 마스터는 삭제 버튼 추가
+                
                 show_content = True
-                if str(row.get("비공개","FALSE")) == "TRUE": show_content = False 
+                if str(row.get("비공개","FALSE")) == "TRUE":
+                    show_content = False 
+                    # 여기서 비밀번호 확인 로직을 넣을 수 있지만, 일단 목록에는 숨김 처리
+                
                 if show_content or st.session_state.get('logged_in_manager') == "MASTER":
                     with st.container(border=True):
-                        if str(row.get("비공개","FALSE")) == "TRUE": st.write(f"🔒 **{row['제목']}** (비공개)")
-                        else: st.write(f"**{row['제목']}**")
+                        if str(row.get("비공개","FALSE")) == "TRUE":
+                            st.write(f"🔒 **{row['제목']}** (비공개)")
+                        else:
+                            st.write(f"**{row['제목']}**")
+                        
                         st.caption(f"작성자: {row['작성자']}")
-                        if show_content: st.write(row['내용'])
+                        if show_content:
+                            st.write(row['내용'])
+                        
+                        # [추가] 마스터 전용 삭제 버튼
                         if st.session_state.get('logged_in_manager') == "MASTER":
                             if st.button("🗑️ 삭제", key=f"del_sugg_{idx}"):
                                 delete_row_by_index("건의사항", idx)
                                 st.success("🗑️ 삭제되었습니다.")
-                                tm.sleep(1); st.rerun()
+                                time.sleep(1)
+                                st.rerun()
 
     # 3. 근무표
     with tab3:
@@ -372,30 +317,41 @@ with main_container.container():
 
         if view_type == "달력":
             calendar_css = """
-                .fc { background: white !important; border-radius: 10px; padding: 5px; }
-                .fc-daygrid-day-number, .fc-col-header-cell-cushion { color: #000000 !important; text-decoration: none !important; }
+                .fc { background: white !important; }
+                .fc-daygrid-day-number { font-weight: bold !important; text-decoration: none !important; }
+                .fc-col-header-cell-cushion { font-weight: bold !important; text-decoration: none !important; }
+                /* 일요일 빨강 */
                 .fc-day-sun .fc-daygrid-day-number, .fc-day-sun .fc-col-header-cell-cushion { color: #FF4B4B !important; }
+                /* 토요일 파랑 */
                 .fc-day-sat .fc-daygrid-day-number, .fc-day-sat .fc-col-header-cell-cushion { color: #1E90FF !important; }
                 .fc-event { cursor: pointer; }
             """
             cal = calendar(events=events, options={"initialView": "dayGridMonth", "height": 750}, key=st.session_state['calendar_key'], custom_css=calendar_css)
+            
             if cal.get("callback") == "eventClick":
                 evt = cal["eventClick"]["event"]
                 props = evt.get("extendedProps", {})
                 st.info(f"📌 {evt['title']}")
+                
                 if props.get("type") == "leave":
                     name = props.get("name")
                     user_df = approved_df[approved_df['이름'] == name]
+                    
                     total_usage = {}
                     for _, u_row in user_df.iterrows():
                         usage = calculate_leave_usage(u_row['날짜및시간'], u_row['구분'])
                         for m, val in usage.items():
                             total_usage[m] = total_usage.get(m, 0) + val
+                            
                     st.write(f"📊 **{name}님의 월별 실사용 현황 (주말/공휴일 제외)**")
                     if total_usage:
                         st.dataframe(pd.DataFrame(list(total_usage.items()), columns=["월", "사용일수"]).sort_values("월"), hide_index=True)
         else:
-            st.dataframe(pd.DataFrame(events))
+            filtered_events = [e for e in events if e.get("extendedProps", {}).get("type") != "holiday"]
+            if filtered_events:
+                list_df = pd.DataFrame(filtered_events)
+                st.dataframe(list_df, column_config={"color": None, "extendedProps": None, "resourceId": None, "title": "내용", "start": "시작", "end": "종료"}, hide_index=True, use_container_width=True)
+            else: st.info("등록된 일정이 없습니다.")
 
     # 4. 근태신청
     with tab4:
@@ -403,14 +359,14 @@ with main_container.container():
         if st.button("📝 신청서 작성", on_click=toggle_attend): pass
         if st.session_state['show_attend_form']:
             with st.container(border=True):
-                date_mode = st.radio("기간 설정", ["하루/반차 (단일)", "기간 (연차/휴가)"], horizontal=True)
+                date_mode = st.radio("기간 설정", ["하루/반차/외출 (단일)", "기간 (연차/휴가)"], horizontal=True)
                 final_date_str = ""
-                if date_mode == "하루/반차 (단일)":
+                if date_mode == "하루/반차/외출 (단일)":
                     st.write("**📆 일시 및 시간 선택 (단일)**")
                     dc1, dc2, dc3 = st.columns(3)
                     d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
-                    t_start = dc2.time_input("시작 시간", value=dt_time(9,0))
-                    t_end = dc3.time_input("종료 시간", value=dt_time(18,0))
+                    t_start = dc2.time_input("시작 시간", value=time(9,0))
+                    t_end = dc3.time_input("종료 시간", value=time(18,0))
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
                 else:
                     st.write("**📆 기간 및 시간 선택 (연차/휴가)**")
@@ -418,11 +374,11 @@ with main_container.container():
                     with dc1:
                         st.caption("시작 일시")
                         d_start = st.date_input("시작일", value=datetime.now(KST))
-                        t_start = st.time_input("시작 시간", value=dt_time(9,0))
+                        t_start = st.time_input("시작 시간", value=time(9,0))
                     with dc2:
                         st.caption("종료 일시")
                         d_end = st.date_input("종료일", value=datetime.now(KST))
-                        t_end = st.time_input("종료 시간", value=dt_time(18,0))
+                        t_end = st.time_input("종료 시간", value=time(18,0))
                     if d_start > d_end: st.error("⚠️ 종료일이 시작일보다 빠릅니다.")
                     else: final_date_str = f"{d_start} {t_start.strftime('%H:%M')} ~ {d_end} {t_end.strftime('%H:%M')}"
                 st.info(f"선택된 일시: {final_date_str}")
@@ -437,8 +393,9 @@ with main_container.container():
                         if not name or not pw: st.error("이름과 비밀번호를 입력해주세요.")
                         else:
                             save_attendance(COMPANY, name, type_val, final_date_str, reason, pw, approver)
-                            st.success(f"✅ {approver}님에게 승인 요청되었습니다.")
-                            tm.sleep(1.5); st.session_state['show_attend_form']=False; st.rerun()
+                            st.success(f"✅ {approver}님에게 승인 요청이 전송되었습니다.")
+                            time.sleep(1.5)
+                            st.session_state['show_attend_form']=False; st.rerun()
         st.divider()
         with st.form("search"):
             sc1, sc2 = st.columns(2)
@@ -470,7 +427,8 @@ with main_container.container():
                                 user_db[selected_name] = new_pw
                                 save_user_db(user_db)
                                 st.success("설정 완료! 1초 뒤 로그인됩니다.")
-                                tm.sleep(1); st.rerun()
+                                time.sleep(1)
+                                st.rerun()
                             else: st.error("비밀번호가 일치하지 않습니다.")
                 else:
                     with st.form("manager_login_form"):
@@ -505,12 +463,13 @@ with main_container.container():
                             if st.button(f"'{target}' 비밀번호 삭제"):
                                 del user_db[target]; save_user_db(user_db)
                                 st.success(f"✅ {target}님의 비밀번호가 초기화되었습니다.")
-                                tm.sleep(1); st.rerun()
+                                time.sleep(1)
+                                st.rerun()
 
             m_tab1, m_tab2, m_tab3 = st.tabs(["✅ 결재 관리", "📢 공지/일정", "📊 통계"])
             with m_tab1:
                 df = load_data("근태신청", COMPANY)
-                if not df.empty and '상태' in df.columns and '승인담당자' in df.columns:
+                if not df.empty and '상태' in df.columns:
                     pend = pd.DataFrame()
                     if manager_id == "MASTER":
                         pend = df[df['상태'] == '최종승인대기']
@@ -539,11 +498,13 @@ with main_container.container():
                                     else: 
                                         update_attendance_step("근태신청", i, "2차승인대기", "반장")
                                         st.success("✅ 승인 완료! 반장에게 넘어갑니다.")
-                                    tm.sleep(1); st.rerun()
+                                    time.sleep(1)
+                                    st.rerun()
                                 if c_rej.button("반려", key=f"rej_{i}"):
                                     update_attendance_step("근태신청", i, "반려")
                                     st.error("⛔ 반려 처리되었습니다.")
-                                    tm.sleep(1); st.rerun()
+                                    time.sleep(1)
+                                    st.rerun()
                 else: st.info("데이터가 없습니다.")
 
             with m_tab2:
@@ -558,19 +519,22 @@ with main_container.container():
                         if type_sel == "공지사항": save_notice(COMPANY, t, c, is_imp)
                         else: save_schedule(COMPANY, str(d_s), t, c, manager_name)
                         st.success("✅ 내용이 등록되었습니다.")
-                        tm.sleep(1); st.rerun()
+                        time.sleep(1)
+                        st.rerun()
             with m_tab3:
                 st.write("### 📊 전사원 월별 연차 사용 현황")
                 df = load_data("근태신청", COMPANY)
                 if not df.empty and '상태' in df.columns:
                     df = df[df['상태'] == '최종승인']
                     stats_data = {} 
+                    
                     for _, row in df.iterrows():
                         usage = calculate_leave_usage(row['날짜및시간'], row['구분'])
                         name = row['이름']
                         if name not in stats_data: stats_data[name] = {}
                         for mon, val in usage.items():
                             stats_data[name][mon] = stats_data[name].get(mon, 0) + val
+                    
                     if stats_data:
                         final_list = []
                         for name, mon_data in stats_data.items():
