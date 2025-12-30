@@ -10,12 +10,13 @@ from streamlit_calendar import calendar
 import time
 
 # =========================================================
-# [설정] 페이지 기본 설정
+# [설정] 페이지 기본 설정 (사이드바 기본 닫힘)
 # =========================================================
 st.set_page_config(
     page_title="제이유 사내광장",
     page_icon="🏢",
-    layout="centered"
+    layout="centered",
+    initial_sidebar_state="collapsed" # 사이드바 숨김 상태로 시작
 )
 
 # 잔상 제거용 메인 컨테이너
@@ -23,22 +24,33 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 아이콘 완전 숨김 및 UI 디자인
+# [스타일] CSS: 상단 깨진 아이콘(사이드바 버튼) 삭제 및 UI 정리
 # =========================================================
 st.markdown("""
 <style>
-    /* [1] 문제의 원인인 화살표 아이콘 자체를 아예 숨김 처리 (삭제) */
+    /* [1] 상단 'keyboard_double_arrow_right' (사이드바 버튼) 완전 삭제 */
+    [data-testid="stSidebarCollapsedControl"] {
+        display: none !important;
+    }
+    section[data-testid="stSidebar"] {
+        display: none !important;
+    }
+    
+    /* [2] 상단 헤더 여백 조정 (버튼 삭제로 인한 공백 제거) */
+    .block-container {
+        padding-top: 2rem !important;
+    }
+
+    /* [3] Expander 아이콘 숨김 (이전 요청사항 유지) */
     div[data-testid="stExpander"] summary span,
     div[data-testid="stExpander"] summary svg {
         display: none !important;
     }
-    
-    /* [2] 엑스팬더 헤더의 텍스트만 보이게 조정 */
     div[data-testid="stExpander"] summary {
         padding-left: 10px !important;
     }
 
-    /* [3] 버튼 디자인 (그라데이션) */
+    /* [4] 버튼 디자인 (그라데이션) */
     div.stButton > button {
         width: 100%;
         background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
@@ -55,25 +67,30 @@ st.markdown("""
         box-shadow: 0 6px 12px rgba(0,0,0,0.2);
     }
 
-    /* [4] 폼 내부 버튼 (초록색 계열) */
+    /* [5] 로그아웃 버튼 전용 스타일 (빨간색 계열) */
+    div.logout-btn > button {
+        background: linear-gradient(90deg, #cb2d3e 0%, #ef473a 100%) !important;
+        padding: 0.3rem 0.5rem !important;
+        font-size: 14px !important;
+    }
+
+    /* [6] 폼 내부 버튼 (초록색 계열) */
     div[data-testid="stForm"] div.stButton > button {
         background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%);
     }
 
-    /* [5] 입력창 둥글게 */
+    /* [7] 입력창 둥글게 */
     .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
         border-radius: 10px;
     }
     
-    /* [6] 달력 높이 고정 */
+    /* [8] 달력 높이 고정 */
     iframe[title="streamlit_calendar.calendar"] { 
         height: 750px !important; 
     }
     
-    /* [7] 본문 폰트 크기 조정 (충돌 방지를 위해 구체적 지정 없이 기본값 활용하되 크기만 조정) */
-    p {
-        font-size: 16px;
-    }
+    /* [9] 폰트 크기 최적화 */
+    p { font-size: 16px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -209,6 +226,7 @@ def calculate_leave_usage(date_str, leave_type):
 if 'company_name' not in st.session_state:
     with main_container.container():
         st.title("🏢 제이유 그룹 인트라넷")
+        st.write("접속하려는 회사의 코드를 입력해주세요.")
         with st.form("login_form"):
             pw_input = st.text_input("회사 접속 코드", type="password")
             if st.form_submit_button("로그인"):
@@ -225,15 +243,22 @@ if 'company_name' not in st.session_state:
 # ==========================================
 COMPANY = st.session_state['company_name']
 
-st.sidebar.title(f"📍 {COMPANY}")
-if st.sidebar.button("로그아웃"):
-    del st.session_state['company_name']
-    if 'logged_in_manager' in st.session_state: del st.session_state['logged_in_manager']
-    st.cache_data.clear()
-    st.rerun()
-
 with main_container.container():
-    st.title(f"🏢 {COMPANY} 사내광장")
+    # [수정] 사이드바 제거 -> 상단 헤더 바로 대체
+    # 로그아웃 버튼을 우측 상단으로 이동
+    h_col1, h_col2 = st.columns([0.7, 0.3])
+    
+    with h_col1:
+        st.title(f"🏢 {COMPANY}")
+        
+    with h_col2:
+        # 로그아웃 버튼 (CSS 클래스 적용을 위해 컨테이너 사용 가능하나 간단히 버튼 배치)
+        st.write("") # 줄맞춤용 공백
+        if st.button("로그아웃 🚪"):
+            del st.session_state['company_name']
+            if 'logged_in_manager' in st.session_state: del st.session_state['logged_in_manager']
+            st.cache_data.clear()
+            st.rerun()
 
     # 상태변수 초기화
     if 'show_sugg_form' not in st.session_state: st.session_state['show_sugg_form'] = False
@@ -260,7 +285,6 @@ with main_container.container():
 
     # 2. 제안
     with tab2:
-        # st.expander 대신 버튼으로 폼 토글 (아이콘 문제 원천 차단)
         if st.button("✍️ 제안 작성하기", on_click=toggle_sugg): pass
         
         if st.session_state['show_sugg_form']:
@@ -349,7 +373,6 @@ with main_container.container():
                 except: pass
 
         if view_type == "달력":
-            # 달력 CSS: 깔끔하게
             calendar_css = """
                 .fc { background: white !important; }
                 .fc-day-sun .fc-daygrid-day-number { color: #FF4B4B !important; }
@@ -466,8 +489,6 @@ with main_container.container():
                                 st.session_state['logged_in_manager'] = selected_name; st.rerun()
                             else: st.error("비밀번호 오류")
             
-            # [대체제 적용] st.expander -> st.toggle
-            # 아이콘 깨짐 원인인 expander 대신 토글 스위치 사용
             st.write("")
             if st.toggle("🔐 시스템 최고 관리자 (Master) 로그인"):
                 with st.form("master_login_form"):
@@ -485,7 +506,6 @@ with main_container.container():
             st.success(f"👋 접속중: {manager_name}")
             
             if manager_id == "MASTER":
-                # 여기도 expander 대신 토글 사용
                 if st.toggle("🔐 관리자 비밀번호 초기화 (마스터 기능)"):
                     user_db = load_user_db()
                     registered_users = [u for u in user_db.keys() if u != "MASTER"]
@@ -515,7 +535,6 @@ with main_container.container():
                     if pend.empty: st.info("대기중인 건이 없습니다.")
                     else:
                         for i, r in pend.iterrows():
-                            # Expander 사용하되 CSS로 아이콘 숨김 처리됨
                             with st.expander(f"[{r['이름']}] {r['구분']} - {r['날짜및시간']}"):
                                 st.write(f"사유: {r['사유']}")
                                 c_app, c_rej = st.columns(2)
