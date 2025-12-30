@@ -71,15 +71,24 @@ def load_data(sheet_name, company_name):
         data = sheet.get_all_records()
         df = pd.DataFrame(data)
         
-        if df.empty:
-            if sheet_name == "근태신청":
-                df = pd.DataFrame(columns=['소속', '작성일', '이름', '구분', '날짜및시간', '사유', '상태', '비밀번호', '승인자'])
-            elif sheet_name == "공지사항":
-                df = pd.DataFrame(columns=['소속', '작성일', '제목', '내용', '중요'])
-            elif sheet_name == "건의사항":
-                df = pd.DataFrame(columns=['소속', '작성일', '제목', '내용', '작성자', '비공개', '비밀번호'])
-            elif sheet_name == "일정관리":
-                 df = pd.DataFrame(columns=['소속', '날짜', '제목', '내용', '작성자'])
+        # [수정 완료] 사용자가 제공한 정확한 컬럼명으로 업데이트
+        # 건의사항 -> 제안(UI)으로 바뀌었지만 시트 이름은 '건의사항' 유지 (DB 연결 위해)
+        required_cols = {
+            "근태신청": ['소속', '신청일', '이름', '구분', '날짜및시간', '사유', '상태', '비밀번호', '승인담당자'],
+            "공지사항": ['소속', '작성일', '제목', '내용', '중요'],
+            "건의사항": ['소속', '작성일', '제목', '내용', '작성자', '비공개', '비밀번호'],
+            "일정관리": ['소속', '날짜', '제목', '내용', '작성자']
+        }
+
+        # 데이터프레임이 비어있으면 강제 생성
+        if df.empty and sheet_name in required_cols:
+             df = pd.DataFrame(columns=required_cols[sheet_name])
+        
+        # 시트에 없는 컬럼이 있으면 강제로 빈 컬럼 추가 (에러 방지)
+        if sheet_name in required_cols:
+            for col in required_cols[sheet_name]:
+                if col not in df.columns:
+                    df[col] = ""
 
         df = df.astype(str)
         
@@ -99,12 +108,14 @@ def save_notice(company, title, content, is_important):
     st.cache_data.clear()
 
 def save_suggestion(company, title, content, author, is_private, password):
+    # 시트 이름은 '건의사항' 유지
     sheet = get_worksheet("건의사항")
     sheet.append_row([company, get_korea_time(), title, content, author, "TRUE" if is_private else "FALSE", str(password)])
     st.cache_data.clear()
 
 def save_attendance(company, name, type_val, date_range_str, reason, password, approver):
     sheet = get_worksheet("근태신청")
+    # 컬럼 순서: 소속, 신청일, 이름, 구분, 날짜및시간, 사유, 상태, 비밀번호, 승인담당자
     sheet.append_row([company, get_korea_time(), name, type_val, date_range_str, reason, "대기중", str(password), approver])
     st.cache_data.clear()
 
@@ -115,6 +126,7 @@ def save_schedule(company, date_str, title, content, author):
 
 def update_attendance_status(sheet_name, row_idx, new_status):
     sheet = get_worksheet(sheet_name)
+    # 상태 컬럼은 G열(7번째)
     sheet.update_cell(row_idx + 2, 7, new_status)
     st.cache_data.clear()
 
@@ -159,7 +171,8 @@ with main_container.container():
     def toggle_sugg(): st.session_state['show_sugg_form'] = not st.session_state['show_sugg_form']
     def toggle_attend(): st.session_state['show_attend_form'] = not st.session_state['show_attend_form']
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 공지", "🗣️ 건의", "📆 근무표", "📅 근태신청", "⚙️ 관리자"])
+    # [수정] 탭 이름 '건의' -> '제안' 변경
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📋 공지", "🗣️ 제안", "📆 근무표", "📅 근태신청", "⚙️ 관리자"])
 
     # 1. 공지사항
     with tab1:
@@ -177,9 +190,10 @@ with main_container.container():
                     st.caption(f"📅 {row['작성일']}")
                     st.markdown(f"{row['내용']}")
 
-    # 2. 건의사항
+    # 2. 제안(구 건의사항)
     with tab2:
-        if st.button("✍️ 작성하기", on_click=toggle_sugg): pass
+        # [수정] UI 텍스트 '제안'으로 변경
+        if st.button("✍️ 제안 작성하기", on_click=toggle_sugg): pass
         if st.session_state['show_sugg_form']:
             with st.container(border=True):
                 with st.form("sugg_form", clear_on_submit=True):
@@ -214,6 +228,7 @@ with main_container.container():
         for d, n in kr_holidays.items():
             events.append({"title": n, "start": str(d), "color": "#FF4B4B", "extendedProps": {"type": "holiday"}})
 
+        # 일정
         df_sch = load_data("일정관리", COMPANY)
         if not df_sch.empty and '날짜' in df_sch.columns:
             for i, r in df_sch.iterrows():
@@ -226,28 +241,39 @@ with main_container.container():
                     except: pass
                 events.append({"title": f"📢 {r['제목']}", "start": start, "end": end, "color": "#8A2BE2", "extendedProps": {"content": r['내용'], "type": "schedule"}})
 
+        # 근태
         df_cal = load_data("근태신청", COMPANY)
         approved_df = pd.DataFrame()
+        
         if not df_cal.empty and '상태' in df_cal.columns:
             approved_df = df_cal[df_cal['상태'].isin(['최종승인', '승인'])]
             for i, r in approved_df.iterrows():
-                raw_dt = r.get('날짜및시간', '')
-                start_d, end_d = raw_dt.split(' ')[0], raw_dt.split(' ')[0]
-                if "~" in raw_dt:
-                    try:
-                        clean = raw_dt.split('(')[0].strip() if '(' in raw_dt else raw_dt
-                        s_part, e_part = clean.split("~")
-                        start_d = s_part.strip()
-                        end_obj = datetime.strptime(e_part.strip(), "%Y-%m-%d") + timedelta(days=1)
-                        end_d = end_obj.strftime("%Y-%m-%d")
-                    except: pass
-                l_type = r['구분']
-                col = "#D9534F" if "연차" in l_type else "#0275D8"
-                events.append({
-                    "title": f"[{r['이름']}] {l_type}", 
-                    "start": start_d, "end": end_d, "color": col,
-                    "extendedProps": {"name": r['이름'], "type": "leave", "content": r['사유']}
-                })
+                try:
+                    raw_dt = r.get('날짜및시간', '')
+                    start_d = raw_dt[:10]
+                    end_d = raw_dt[:10]
+
+                    if "~" in raw_dt:
+                        parts = raw_dt.split("~")
+                        start_d = parts[0].strip()[:10]
+                        end_part = parts[1].strip()
+                        if len(end_part) > 5:
+                            end_obj = datetime.strptime(end_part[:10], "%Y-%m-%d") + timedelta(days=1)
+                            end_d = end_obj.strftime("%Y-%m-%d")
+                        else:
+                            end_d = start_d
+                    
+                    l_type = r['구분']
+                    col = "#D9534F" if "연차" in l_type else "#0275D8"
+                    
+                    events.append({
+                        "title": f"[{r['이름']}] {l_type}", 
+                        "start": start_d, 
+                        "end": end_d, 
+                        "color": col,
+                        "extendedProps": {"name": r['이름'], "type": "leave", "content": r['사유']}
+                    })
+                except: pass
 
         if view_type == "달력":
             calendar_css = """
@@ -266,7 +292,7 @@ with main_container.container():
                     user_df = approved_df[approved_df['이름'] == name]
                     month_stats = {}
                     for _, u_row in user_df.iterrows():
-                        d_str = u_row['날짜및시간'].split(' ')[0]
+                        d_str = u_row['날짜및시간'][:10]
                         try:
                             mon = d_str[:7]
                             val = 0.5 if "반차" in u_row['구분'] else 1.0
@@ -283,16 +309,44 @@ with main_container.container():
             else:
                 st.info("등록된 일정이 없습니다.")
 
-    # 4. 근태신청 (수정된 부분: 라디오버튼을 폼 밖으로 이동)
+    # 4. 근태신청
     with tab4:
         st.write("### 📅 연차/근태 신청")
         if st.button("📝 신청서 작성", on_click=toggle_attend): pass
         
         if st.session_state['show_attend_form']:
             with st.container(border=True):
-                # [중요 수정] 라디오 버튼을 form 밖으로 뺐습니다. 이제 클릭 즉시 UI가 바뀝니다.
+                # 1. 날짜/시간 선택
                 date_mode = st.radio("기간 설정", ["하루/반차/외출 (단일)", "기간 (연차/휴가)"], horizontal=True)
+                final_date_str = ""
+
+                if date_mode == "하루/반차/외출 (단일)":
+                    st.write("**📆 일시 및 시간 선택 (단일)**")
+                    dc1, dc2, dc3 = st.columns(3)
+                    d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
+                    t_start = dc2.time_input("시작 시간", value=time(9,0))
+                    t_end = dc3.time_input("종료 시간", value=time(18,0))
+                    final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
+                else:
+                    st.write("**📆 기간 및 시간 선택 (연차/휴가)**")
+                    dc1, dc2 = st.columns(2)
+                    with dc1:
+                        st.caption("시작 일시")
+                        d_start = st.date_input("시작일", value=datetime.now(KST))
+                        t_start = st.time_input("시작 시간", value=time(9,0))
+                    with dc2:
+                        st.caption("종료 일시")
+                        d_end = st.date_input("종료일", value=datetime.now(KST))
+                        t_end = st.time_input("종료 시간", value=time(18,0))
+                    
+                    if d_start > d_end:
+                        st.error("⚠️ 종료일이 시작일보다 빠릅니다.")
+                    else:
+                        final_date_str = f"{d_start} {t_start.strftime('%H:%M')} ~ {d_end} {t_end.strftime('%H:%M')}"
+
+                st.info(f"선택된 일시: {final_date_str}")
                 
+                # 2. 나머지 정보 입력
                 with st.form("att_form"):
                     c1, c2 = st.columns(2)
                     name = c1.text_input("이름")
@@ -300,37 +354,6 @@ with main_container.container():
                     
                     type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근"])
                     approver = st.selectbox("승인 담당자", ALL_MANAGERS)
-                    
-                    st.markdown("---")
-                    
-                    final_date_str = ""
-                    
-                    if date_mode == "하루/반차/외출 (단일)":
-                        st.write("**📆 일시 및 시간 선택 (단일)**")
-                        dc1, dc2, dc3 = st.columns(3)
-                        d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
-                        t_start = dc2.time_input("시작 시간", value=time(9,0))
-                        t_end = dc3.time_input("종료 시간", value=time(18,0))
-                        final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
-                    else:
-                        # [확인] 기간 선택 시: 시작일/시간 + 종료일/시간 모두 표시
-                        st.write("**📆 기간 및 시간 선택 (연차/휴가)**")
-                        dc1, dc2 = st.columns(2)
-                        with dc1:
-                            st.caption("시작 일시")
-                            d_start = st.date_input("시작일", value=datetime.now(KST))
-                            t_start = st.time_input("시작 시간", value=time(9,0))
-                        with dc2:
-                            st.caption("종료 일시")
-                            d_end = st.date_input("종료일", value=datetime.now(KST))
-                            t_end = st.time_input("종료 시간", value=time(18,0))
-                        
-                        if d_start > d_end:
-                            st.error("⚠️ 종료일이 시작일보다 빠릅니다.")
-                        else:
-                            final_date_str = f"{d_start} {t_start.strftime('%H:%M')} ~ {d_end} {t_end.strftime('%H:%M')}"
-
-                    st.info(f"선택된 일시: {final_date_str}")
                     reason = st.text_input("사유")
                     
                     if st.form_submit_button("신청하기"):
@@ -407,9 +430,10 @@ with main_container.container():
             with m_tab1:
                 df = load_data("근태신청", COMPANY)
                 if not df.empty and '상태' in df.columns:
+                    # [수정 완료] '승인담당자' 컬럼으로 정확히 필터링
                     pend = df[df['상태'].isin(['대기중'])]
                     if manager_id != "MASTER":
-                        pend = pend[pend['승인자'] == manager_name]
+                        pend = pend[pend['승인담당자'] == manager_name]
                     if pend.empty: 
                         st.info("대기중인 결재 건이 없습니다.")
                     else:
@@ -451,7 +475,7 @@ with main_container.container():
                         if "연차" in row['구분'] or "반차" in row['구분']:
                             use_val = 0.5 if "반차" in row['구분'] else 1.0
                             try:
-                                d_str = row['날짜및시간'].split(' ')[0].split('~')[0].strip()
+                                d_str = row['날짜및시간'][:10]
                                 month = d_str[:7]
                                 stats_data.append({"이름": row['이름'], "월": month, "사용일수": use_val})
                             except: pass
