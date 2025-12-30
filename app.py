@@ -451,7 +451,7 @@ with main_container.container():
                     dc1, dc2, dc3 = st.columns(3)
                     d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
                     t_start = dc2.time_input("시작 시간", value=time(9,0))
-                    t_end = dc3.time_input("종료 시간", value=time(18,0))
+                    t_end = dc3.time_input("종료 시간", value=time(7,0))
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
                 else:
                     st.write("**📆 기간 및 시간 선택 (연차/휴가)**")
