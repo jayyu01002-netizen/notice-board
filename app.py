@@ -9,9 +9,9 @@ import holidays
 from streamlit_calendar import calendar
 import json
 import os
-import time
+import time as tm # [중요 수정] time 모듈 이름 충돌 방지
 
-# --- [설정] 페이지 기본 UI 설정 (모바일 친화적) ---
+# --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
 
 # --- [핵심] 잔상 제거용 메인 컨테이너 ---
@@ -34,39 +34,34 @@ COMPANIES = {
     "0645": "울산 제이유"
 }
 
-# --- [스타일] CSS (모바일 완벽 대응 + 깨진 아이콘 제거) ---
+# --- [스타일] CSS (모바일 깨짐 방지 + 달력 가독성 + 예쁜 버튼) ---
 st.markdown("""
 <style>
-    /* [1] 모바일 전용 스타일 (화면폭 768px 이하) */
+    /* [1] 모바일 전용 스타일 (스마트폰 화면) */
     @media only screen and (max-width: 768px) {
-        /* 상단 여백 확 줄이기 */
+        /* 상단 여백 제거 */
         .block-container {
             padding-top: 1rem !important;
             padding-left: 0.5rem !important;
             padding-right: 0.5rem !important;
         }
         
-        /* 제목(커스텀 h2) 크기 강제 축소 및 한 줄 고정 */
-        .mobile-title {
-            font-size: 20px !important;
-            white-space: nowrap !important; /* 줄바꿈 금지 */
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-            margin-bottom: 10px !important;
-        }
+        /* 제목 글자 크기 확 줄임 (한 줄로 나오게) */
+        h1 { font-size: 1.5rem !important; }
+        h2 { font-size: 1.2rem !important; }
         
-        /* 화살표 텍스트(아이콘 깨짐) 원천 차단: 사이드바 토글 영역 등 숨김 처리 시도 */
-        button[kind="header"] { display: none !important; }
-        .st-emotion-cache-16txtl3 { display: none !important; } /* 특정 버전 아이콘 클래스 숨김 */
+        /* 깨지는 화살표 텍스트 숨김 처리 (핵심) */
+        button[kind="header"] { color: transparent !important; }
+        div[data-testid="stSidebarCollapsedControl"] { color: transparent !important; }
         
-        /* 탭 글씨 크기 조절 */
-        .stTabs [data-baseweb="tab"] {
+        /* 탭 버튼 작게 */
+        .stTabs button {
             font-size: 14px !important;
-            padding: 5px !important;
+            padding: 4px !important;
         }
     }
 
-    /* [2] 공통 버튼 스타일 (그라데이션) */
+    /* [2] 버튼 스타일 (블루-퍼플 그라데이션) */
     div.stButton > button {
         width: 100%;
         background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
@@ -76,24 +71,39 @@ st.markdown("""
         font-weight: bold;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
-    
-    /* [3] 폼 제출 버튼 (녹색 계열) */
+    div.stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+    }
+
+    /* [3] 폼 제출 버튼 (그린 그라데이션) */
     div[data-testid="stForm"] div.stButton > button {
         background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%);
     }
 
-    /* [4] 달력 평일 글씨 검정색 강제 */
-    .fc-daygrid-day-number, .fc-col-header-cell-cushion {
-        color: #000000 !important;
-        text-decoration: none !important;
-    }
-    .fc-day-sun .fc-daygrid-day-number { color: #FF4B4B !important; }
-    .fc-day-sat .fc-daygrid-day-number { color: #1E90FF !important; }
+    /* [4] 달력 글씨 색상 강제 (평일 검정) */
+    .fc { background: white !important; border-radius: 10px; padding: 5px; }
     
-    /* [5] 화살표 텍스트 깨짐 방지용 전역 숨김 (필요시) */
-    /* data-testid="stSidebarNav" 내부의 텍스트가 깨질 경우를 대비 */
-    [data-testid="stSidebarCollapsedControl"] { color: transparent !important; }
-    [data-testid="stSidebarCollapsedControl"]::before { content: "☰"; color: black; font-size: 20px; }
+    /* 날짜 숫자 및 요일 헤더: 무조건 검정색 */
+    .fc-daygrid-day-number, .fc-col-header-cell-cushion {
+        color: #000000 !important; 
+        font-weight: bold !important; 
+        text-decoration: none !important; 
+    }
+    
+    /* 일요일 빨강 */
+    .fc-day-sun .fc-daygrid-day-number, .fc-day-sun .fc-col-header-cell-cushion { color: #FF4B4B !important; }
+    
+    /* 토요일 파랑 */
+    .fc-day-sat .fc-daygrid-day-number, .fc-day-sat .fc-col-header-cell-cushion { color: #1E90FF !important; }
+    
+    /* 이벤트 폰트 */
+    .fc-event-title { color: white !important; font-weight: bold !important; }
+
+    /* [5] 입력창 둥글게 */
+    .stTextInput input, .stSelectbox div, .stDateInput input, .stTimeInput input {
+        border-radius: 8px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -167,6 +177,7 @@ def save_suggestion(company, title, content, author, is_private, password):
 def save_attendance(company, name, type_val, date_range_str, reason, password, approver):
     sheet = get_worksheet("근태신청")
     initial_status = "1차승인대기" if approver in FOREMEN else "2차승인대기"
+    # [확인] 승인담당자 컬럼에 approver 저장
     sheet.append_row([company, get_korea_time(), name, type_val, date_range_str, reason, initial_status, str(password), approver])
     st.cache_data.clear()
 
@@ -217,8 +228,8 @@ def calculate_leave_usage(date_str, leave_type):
 # ==========================================
 if 'company_name' not in st.session_state:
     with main_container.container():
-        # [수정] 모바일 제목 전용 HTML 사용
-        st.markdown('<h2 class="mobile-title">🏢 제이유 그룹 인트라넷</h2>', unsafe_allow_html=True)
+        # [수정] 모바일 깨짐 방지용 헤더
+        st.markdown('<h2 style="text-align:center;">🏢 제이유 그룹 인트라넷</h2>', unsafe_allow_html=True)
         st.write("접속하려는 회사의 코드를 입력해주세요.")
         with st.form("login_form"):
             pw_input = st.text_input("회사 접속 코드", type="password")
@@ -244,8 +255,8 @@ if st.sidebar.button("로그아웃"):
     st.rerun()
 
 with main_container.container():
-    # [수정] st.title 대신 HTML 사용 (모바일 깨짐 방지 및 한줄 강제)
-    st.markdown(f'<h2 class="mobile-title">🏢 {COMPANY} 사내광장</h2>', unsafe_allow_html=True)
+    # [수정] 제목 한 줄로 보이게
+    st.markdown(f'<h3 style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">🏢 {COMPANY} 사내광장</h3>', unsafe_allow_html=True)
 
     if 'show_sugg_form' not in st.session_state: st.session_state['show_sugg_form'] = False
     if 'show_attend_form' not in st.session_state: st.session_state['show_attend_form'] = False
@@ -283,8 +294,8 @@ with main_container.container():
                     private = st.checkbox("🔒 비공개")
                     if st.form_submit_button("등록"):
                         save_suggestion(COMPANY, title, content, author, private, pw)
-                        st.success("✅ 등록되었습니다.")
-                        time.sleep(1.2)
+                        st.success("✅ 제안 내용이 안전하게 등록되었습니다.")
+                        tm.sleep(1.2)
                         st.session_state['show_sugg_form']=False; st.rerun()
         st.divider()
         df_s = load_data("건의사항", COMPANY)
@@ -303,7 +314,7 @@ with main_container.container():
                             if st.button("🗑️ 삭제", key=f"del_sugg_{idx}"):
                                 delete_row_by_index("건의사항", idx)
                                 st.success("🗑️ 삭제되었습니다.")
-                                time.sleep(1); st.rerun()
+                                tm.sleep(1); st.rerun()
 
     # 3. 근무표
     with tab3:
@@ -356,7 +367,6 @@ with main_container.container():
                 except: pass
 
         if view_type == "달력":
-            # 모바일 최적화 CSS 적용됨
             cal = calendar(events=events, options={"initialView": "dayGridMonth", "height": 750}, key=st.session_state['calendar_key'])
             if cal.get("callback") == "eventClick":
                 evt = cal["eventClick"]["event"]
@@ -380,7 +390,7 @@ with main_container.container():
                 st.dataframe(list_df, column_config={"color": None, "extendedProps": None, "resourceId": None, "title": "내용", "start": "시작", "end": "종료"}, hide_index=True, use_container_width=True)
             else: st.info("등록된 일정이 없습니다.")
 
-    # 4. 근태신청
+    # 4. 근태신청 (수정: time 객체 이름 충돌 해결)
     with tab4:
         st.write("### 📅 연차/근태 신청")
         if st.button("📝 신청서 작성", on_click=toggle_attend): pass
@@ -392,6 +402,7 @@ with main_container.container():
                     st.write("**📆 일시 및 시간 선택 (단일)**")
                     dc1, dc2, dc3 = st.columns(3)
                     d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
+                    # [수정] time(9,0) 호출 시 충돌 없음 (time 모듈을 tm으로 바꿨으므로)
                     t_start = dc2.time_input("시작 시간", value=time(9,0))
                     t_end = dc3.time_input("종료 시간", value=time(18,0))
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
@@ -420,8 +431,8 @@ with main_container.container():
                         if not name or not pw: st.error("이름과 비밀번호를 입력해주세요.")
                         else:
                             save_attendance(COMPANY, name, type_val, final_date_str, reason, pw, approver)
-                            st.success(f"✅ {approver}님에게 승인 요청되었습니다.")
-                            time.sleep(1.5)
+                            st.success(f"✅ {approver}님에게 승인 요청이 전송되었습니다.")
+                            tm.sleep(1.5)
                             st.session_state['show_attend_form']=False; st.rerun()
         st.divider()
         with st.form("search"):
@@ -454,7 +465,7 @@ with main_container.container():
                                 user_db[selected_name] = new_pw
                                 save_user_db(user_db)
                                 st.success("설정 완료! 1초 뒤 로그인됩니다.")
-                                time.sleep(1); st.rerun()
+                                tm.sleep(1); st.rerun()
                             else: st.error("비밀번호가 일치하지 않습니다.")
                 else:
                     with st.form("manager_login_form"):
@@ -489,23 +500,25 @@ with main_container.container():
                             if st.button(f"'{target}' 비밀번호 삭제"):
                                 del user_db[target]; save_user_db(user_db)
                                 st.success(f"✅ {target}님의 비밀번호가 초기화되었습니다.")
-                                time.sleep(1); st.rerun()
+                                tm.sleep(1); st.rerun()
 
             m_tab1, m_tab2, m_tab3 = st.tabs(["✅ 결재 관리", "📢 공지/일정", "📊 통계"])
             with m_tab1:
                 df = load_data("근태신청", COMPANY)
                 if not df.empty and '상태' in df.columns:
                     pend = pd.DataFrame()
-                    if manager_id == "MASTER":
-                        pend = df[df['상태'] == '최종승인대기']
-                        st.info("📢 최종 승인 대기중인 건입니다.")
-                    elif manager_id == "반장":
-                        pend = df[df['상태'] == '2차승인대기']
-                        st.info("📢 중간(반장) 승인 대기중인 건입니다.")
-                    else:
-                        pend = df[(df['상태'] == '1차승인대기') & (df['승인담당자'] == manager_name)]
-                        st.info("📢 1차(조장) 승인 대기중인 건입니다.")
-
+                    # [수정] 정확한 컬럼명 '승인담당자' 사용 + KeyError 방지
+                    if '승인담당자' in df.columns:
+                        if manager_id == "MASTER":
+                            pend = df[df['상태'] == '최종승인대기']
+                            st.info("📢 최종 승인 대기중인 건입니다.")
+                        elif manager_id == "반장":
+                            pend = df[df['상태'] == '2차승인대기']
+                            st.info("📢 중간(반장) 승인 대기중인 건입니다.")
+                        else:
+                            pend = df[(df['상태'] == '1차승인대기') & (df['승인담당자'] == manager_name)]
+                            st.info("📢 1차(조장) 승인 대기중인 건입니다.")
+                    
                     if pend.empty: st.info("현재 대기중인 결재 건이 없습니다.")
                     else:
                         st.write(f"총 {len(pend)}건의 문서가 있습니다.")
@@ -523,11 +536,11 @@ with main_container.container():
                                     else: 
                                         update_attendance_step("근태신청", i, "2차승인대기", "반장")
                                         st.success("✅ 승인 완료! 반장에게 넘어갑니다.")
-                                    time.sleep(1); st.rerun()
+                                    tm.sleep(1); st.rerun()
                                 if c_rej.button("반려", key=f"rej_{i}"):
                                     update_attendance_step("근태신청", i, "반려")
                                     st.error("⛔ 반려 처리되었습니다.")
-                                    time.sleep(1); st.rerun()
+                                    tm.sleep(1); st.rerun()
                 else: st.info("데이터가 없습니다.")
 
             with m_tab2:
@@ -542,7 +555,7 @@ with main_container.container():
                         if type_sel == "공지사항": save_notice(COMPANY, t, c, is_imp)
                         else: save_schedule(COMPANY, str(d_s), t, c, manager_name)
                         st.success("✅ 내용이 등록되었습니다.")
-                        time.sleep(1); st.rerun()
+                        tm.sleep(1); st.rerun()
             with m_tab3:
                 st.write("### 📊 전사원 월별 연차 사용 현황")
                 df = load_data("근태신청", COMPANY)
