@@ -451,8 +451,10 @@ with main_container.container():
                     st.write("**📆 일시 및 시간 선택 (단일)**")
                     dc1, dc2, dc3 = st.columns(3)
                     d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
-                    t_start = dc2.time_input("시작 시간", value=time(9,0))
-                    # [수정] 기본값 17시로 변경
+                    
+                    # [수정] 시작 시간 08:00로 변경
+                    t_start = dc2.time_input("시작 시간", value=time(8,0))
+                    # [수정] 종료 시간 17:00로 변경
                     t_end = dc3.time_input("종료 시간", value=time(17,0)) 
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
                 else:
@@ -461,11 +463,12 @@ with main_container.container():
                     with dc1:
                         st.caption("시작 일시")
                         d_start = st.date_input("시작일", value=datetime.now(KST))
-                        t_start = st.time_input("시작 시간", value=time(9,0))
+                        # [수정] 시작 시간 08:00로 변경
+                        t_start = st.time_input("시작 시간", value=time(8,0))
                     with dc2:
                         st.caption("종료 일시")
                         d_end = st.date_input("종료일", value=datetime.now(KST))
-                        # [수정] 기본값 17시로 변경
+                        # [수정] 종료 시간 17:00로 변경
                         t_end = st.time_input("종료 시간", value=time(17,0))
                     if d_start > d_end: st.error("⚠️ 종료일이 시작일보다 빠릅니다.")
                     else: final_date_str = f"{d_start} {t_start.strftime('%H:%M')} ~ {d_end} {t_end.strftime('%H:%M')}"
