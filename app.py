@@ -23,22 +23,24 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 탭 튕김 방지용 커스텀 메뉴 & 버튼 디자인
+# [스타일] CSS 수정: 목록 안보임 해결 & 버튼 줄바꿈 방지
 # =========================================================
 st.markdown("""
 <style>
-    /* (스타일 CSS는 기존과 동일하여 생략 없이 유지) */
+    /* [1] 제목(h1) 모바일 최적화 */
     h1 { padding-top: 1rem !important; font-size: 2rem !important; }
     @media (max-width: 640px) {
         h1 { font-size: 1.5rem !important; margin-top: 0.5rem !important; }
         .block-container { padding-top: 2rem !important; }
     }
+
+    /* [2] 상단 불필요 요소 숨김 */
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
-    div[data-testid="stExpander"] summary span,
-    div[data-testid="stExpander"] summary svg { display: none !important; }
-    div[data-testid="stExpander"] summary { padding-left: 10px !important; }
-
+    
+    /* [중요 수정] Expander(목록) 글씨 숨김 코드 삭제됨 - 이제 목록이 보입니다 */
+    
+    /* [3] 커스텀 네비게이션 (라디오 버튼) */
     div.row-widget.stRadio > div {
         flex-direction: row;
         justify-content: center;
@@ -70,9 +72,11 @@ st.markdown("""
     div.row-widget.stRadio div[role="radiogroup"] > label > div:first-child {
         display: none !important;
     }
+
+    /* [4] 일반 버튼 (새로고침 등) -> 줄바꿈 절대 방지 */
     div.stButton > button {
-        width: auto !important;
-        padding: 0.3rem 0.7rem !important;
+        width: 100% !important;        /* 버튼이 컬럼에 꽉 차게 */
+        padding: 0.3rem 0.5rem !important;
         font-size: 13px !important;
         border-radius: 6px !important;
         background: #2b2b2b !important;
@@ -80,11 +84,14 @@ st.markdown("""
         border: 1px solid #444444 !important;
         box-shadow: none !important;
         margin-top: 5px !important;
+        white-space: nowrap !important;  /* [핵심] 글자 줄바꿈 금지 */
     }
     div.stButton > button:hover {
         background: #000000 !important;
         color: #ffffff !important;
     }
+
+    /* [5] 폼 내부 버튼 (신청/등록) */
     div[data-testid="stForm"] div.stButton > button {
         width: 100% !important;
         padding: 0.5rem 1rem !important;
@@ -93,11 +100,16 @@ st.markdown("""
         color: white !important;
         border: none !important;
     }
+
+    /* [6] 로그아웃 버튼 -> 빨간색 */
     div[data-testid="column"] button[kind="secondary"] {
         background: #FF4B4B !important;
         color: white !important;
         border: none !important;
+        white-space: nowrap !important;
     }
+
+    /* [7] 입력창 디자인 */
     .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
         border-radius: 8px;
     }
@@ -109,14 +121,9 @@ st.markdown("""
 # =========================================================
 # [설정] 관리자 및 회사 정보
 # =========================================================
-# 장안용 승인자
 JANGAN_FOREMEN = ["JK 조장", "JX 메인 조장", "JX 어퍼 조장", "MX5 조장", "피더 조장"]
 JANGAN_MID = ["반장"]
-
-# [수정] 울산용 승인자 정의
 ULSAN_APPROVERS = ["김대환", "김범진", "홍승곤"]
-
-# 관리자 로그인 목록 병합 (모두가 로그인 가능해야 함)
 ALL_MANAGERS = JANGAN_FOREMEN + JANGAN_MID + ULSAN_APPROVERS + ["MASTER"]
 
 COMPANIES = {
@@ -145,7 +152,7 @@ def load_user_db():
     try:
         sheet = get_worksheet("관리자DB")
         data = sheet.get_all_records()
-        return {str(row['이름']): str(row['비밀번호']) for row in data}
+        return {str(row['이름']).strip(): str(row['비밀번호']).strip() for row in data}
     except: return {}
 
 def save_user_db(db):
@@ -178,13 +185,17 @@ def load_data(sheet_name, company_name):
                 if col not in df.columns: df[col] = ""
                 
         df = df.astype(str)
+        
+        # [데이터 정리] 모든 문자열 컬럼의 앞뒤 공백 제거 (매칭 오류 방지)
+        for col in df.columns:
+            if df[col].dtype == object:
+                df[col] = df[col].str.strip()
+
         if '소속' in df.columns:
-            df['소속'] = df['소속'].str.strip()
             df = df[df['소속'] == company_name.strip()]
         return df
     except: return pd.DataFrame()
 
-# 저장/삭제 함수들
 def save_notice(company, title, content, is_important):
     sheet = get_worksheet("공지사항")
     sheet.append_row([company, get_today(), title, content, "TRUE" if is_important else "FALSE"])
@@ -195,18 +206,13 @@ def save_suggestion(company, title, content, author, is_private, password):
     sheet.append_row([company, get_today(), title, content, author, "TRUE" if is_private else "FALSE", str(password)])
     st.cache_data.clear()
 
-# [수정] save_attendance 함수: 회사별 분기 처리
 def save_attendance(company, name, type_val, date_range_str, reason, password, approver):
     sheet = get_worksheet("근태신청")
-    
+    # 회사별 초기 승인 상태 분기
     if company == "장안 제이유":
-        # [장안] 기존 복잡한 로직 유지
         initial_status = "1차승인대기" if approver in JANGAN_FOREMEN else "2차승인대기"
     else:
-        # [울산] 단순화된 로직 (중간 단계 없음)
-        # 선택된 승인자에게 바로 '승인대기' 상태로 전달
         initial_status = "승인대기" 
-
     sheet.append_row([company, get_today(), name, type_val, date_range_str, reason, initial_status, str(password), approver])
     st.cache_data.clear()
 
@@ -270,29 +276,23 @@ if 'company_name' not in st.session_state:
 COMPANY = st.session_state['company_name']
 
 with main_container.container():
-    # 상단 헤더
     st.title(f"🏢 {COMPANY}")
 
-    # 상태변수 초기화
     if 'show_sugg_form' not in st.session_state: st.session_state['show_sugg_form'] = False
     if 'show_attend_form' not in st.session_state: st.session_state['show_attend_form'] = False
 
     def toggle_sugg(): st.session_state['show_sugg_form'] = not st.session_state['show_sugg_form']
     def toggle_attend(): st.session_state['show_attend_form'] = not st.session_state['show_attend_form']
 
-    # ------------------------------------------------------------------
-    # [네비게이션]
-    # ------------------------------------------------------------------
     tabs = ["📋 공지", "🗣️ 제안", "📆 근무표", "📅 근태신청", "⚙️ 관리자"]
     selected_tab = st.radio("메뉴 선택", tabs, horizontal=True, label_visibility="collapsed")
     
     st.write("")
 
-    # ----------------------------------
     # 1. 공지사항
-    # ----------------------------------
     if selected_tab == "📋 공지":
-        c_space, c_btn = st.columns([0.85, 0.15])
+        # [수정] 버튼 공간 확보 (0.85 -> 0.75, 0.15 -> 0.25)
+        c_space, c_btn = st.columns([0.75, 0.25])
         with c_btn:
             if st.button("🔄 새로고침", key="re_1"): 
                 st.cache_data.clear()
@@ -309,9 +309,7 @@ with main_container.container():
                     st.caption(f"📅 {row['작성일']}")
                     st.markdown(f"{row['내용']}")
 
-    # ----------------------------------
     # 2. 제안
-    # ----------------------------------
     elif selected_tab == "🗣️ 제안":
         if st.button("✍️ 제안 작성하기", on_click=toggle_sugg): pass
         
@@ -350,13 +348,11 @@ with main_container.container():
                                 st.success("삭제됨")
                                 tm.sleep(1); st.rerun()
 
-    # ----------------------------------
     # 3. 근무표
-    # ----------------------------------
     elif selected_tab == "📆 근무표":
-        c_space, c_btn, c_view = st.columns([0.6, 0.15, 0.25])
-        with c_space:
-            st.write("")
+        # [수정] 버튼 공간 확보
+        c_space, c_btn, c_view = st.columns([0.55, 0.20, 0.25])
+        with c_space: st.write("")
         with c_btn:
             if st.button("🔄 새로고침", key="cal_ref"): 
                 st.cache_data.clear()
@@ -441,9 +437,7 @@ with main_container.container():
                 st.dataframe(list_df, column_config={"color": None, "extendedProps": None, "resourceId": None, "title": "내용", "start": "시작", "end": "종료"}, hide_index=True, use_container_width=True)
             else: st.info("등록된 일정이 없습니다.")
 
-    # ----------------------------------
     # 4. 근태신청
-    # ----------------------------------
     elif selected_tab == "📅 근태신청":
         st.write("### 📅 연차/근태 신청")
         if st.button("📝 신청서 작성", on_click=toggle_attend): pass
@@ -481,11 +475,10 @@ with main_container.container():
                     pw = c2.text_input("비밀번호(본인확인용)", type="password")
                     type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근"])
                     
-                    # [수정] 회사별 승인권자 목록 분기 표시
                     if COMPANY == "장안 제이유":
                         approver_options = JANGAN_FOREMEN + JANGAN_MID
                     else:
-                        approver_options = ULSAN_APPROVERS # 김대환, 김범진, 홍승곤
+                        approver_options = ULSAN_APPROVERS
                     
                     approver = st.selectbox("승인 요청 대상", approver_options)
                     reason = st.text_input("사유")
@@ -510,9 +503,7 @@ with main_container.container():
                         for _, r in my_df.iterrows(): st.info(f"{r['날짜및시간']} | {r['구분']} | {r['상태']}")
                 else: st.error("데이터가 없습니다.")
 
-    # ----------------------------------
     # 5. 관리자
-    # ----------------------------------
     elif selected_tab == "⚙️ 관리자":
         st.subheader("⚙️ 관리자 전용")
         if 'logged_in_manager' not in st.session_state:
@@ -550,7 +541,8 @@ with main_container.container():
             manager_id = st.session_state['logged_in_manager']
             manager_name = manager_id
             
-            c_info, c_logout = st.columns([0.8, 0.2])
+            # [수정] 로그아웃 버튼 공간 확보 (0.75:0.25)
+            c_info, c_logout = st.columns([0.75, 0.25])
             with c_info:
                 st.success(f"👋 접속중: {manager_name}")
             with c_logout:
@@ -574,10 +566,7 @@ with main_container.container():
                 df = load_data("근태신청", COMPANY)
                 if not df.empty and '상태' in df.columns:
                     pend = pd.DataFrame()
-                    
-                    # [수정] 대기 리스트 조회 로직 분기
                     if COMPANY == "장안 제이유":
-                        # [장안] 기존 로직
                         if manager_id == "MASTER":
                             pend = df[df['상태'] == '최종승인대기']
                             st.info("📢 최종 승인 대기")
@@ -588,26 +577,23 @@ with main_container.container():
                             pend = df[(df['상태'] == '1차승인대기') & (df['승인담당자'] == manager_name)]
                             st.info("📢 조장 승인 대기")
                     else:
-                        # [울산] 단순 로직 (승인대기 상태인것들)
-                        # 마스터는 모든 대기건 볼 수 있고, 승인자는 본인에게 온 것만 봄
                         if manager_id == "MASTER":
                             pend = df[df['상태'] == '승인대기']
                             st.info("📢 전체 승인 대기 (Master 권한)")
                         elif manager_id in ULSAN_APPROVERS:
-                            pend = df[(df['상태'] == '승인대기') & (df['승인담당자'] == manager_name)]
+                            # [핵심] 공백 제거를 통한 안전한 매칭
+                            pend = df[(df['상태'] == '승인대기') & (df['승인담당자'].str.strip() == manager_name.strip())]
                             st.info(f"📢 {manager_name}님 승인 대기")
 
                     if pend.empty: st.info("대기중인 건이 없습니다.")
                     else:
                         for i, r in pend.iterrows():
+                            # [핵심] Expander 제목이 이제 정상적으로 보일 것입니다.
                             with st.expander(f"[{r['이름']}] {r['구분']} - {r['날짜및시간']}"):
                                 st.write(f"사유: {r['사유']}")
                                 c_app, c_rej = st.columns(2)
-                                
-                                # [수정] 승인 처리 로직 분기
                                 if c_app.button("승인", key=f"app_{i}"):
                                     if COMPANY == "장안 제이유":
-                                        # [장안] 단계별 승인
                                         if manager_id == "MASTER": 
                                             update_attendance_step("근태신청", i, "최종승인")
                                         elif manager_id == "반장": 
@@ -615,10 +601,8 @@ with main_container.container():
                                         else: 
                                             update_attendance_step("근태신청", i, "2차승인대기", "반장")
                                     else:
-                                        # [울산] 즉시 최종 승인 (중간단계 없음)
-                                        # 마스터든 지정 승인자든 누르면 바로 최종승인
+                                        # 울산: 즉시 최종승인
                                         update_attendance_step("근태신청", i, "최종승인")
-
                                     st.success("승인됨"); tm.sleep(1); st.rerun()
                                     
                                 if c_rej.button("반려", key=f"rej_{i}"):
