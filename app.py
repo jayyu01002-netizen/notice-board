@@ -7,90 +7,88 @@ import uuid
 import pytz
 import holidays
 from streamlit_calendar import calendar
-import time
+import time as tm  # [수정] 이름 충돌 방지를 위해 'tm'으로 변경
 
 # =========================================================
-# [설정] 페이지 기본 설정 (사이드바 기본 닫힘)
+# [설정] 페이지 기본 설정
 # =========================================================
 st.set_page_config(
     page_title="제이유 사내광장",
     page_icon="🏢",
     layout="centered",
-    initial_sidebar_state="collapsed" # 사이드바 숨김 상태로 시작
+    initial_sidebar_state="collapsed"
 )
 
-# 잔상 제거용 메인 컨테이너
 main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 상단 깨진 아이콘(사이드바 버튼) 삭제 및 UI 정리
+# [스타일] CSS: 제목 겹침 해결 & 버튼 크기 최적화
 # =========================================================
 st.markdown("""
 <style>
-    /* [1] 상단 'keyboard_double_arrow_right' (사이드바 버튼) 완전 삭제 */
-    [data-testid="stSidebarCollapsedControl"] {
-        display: none !important;
+    /* [1] 제목(h1) 모바일 최적화 (글자 겹침/잘림 방지) */
+    h1 {
+        padding-top: 1rem !important;
+        font-size: 2rem !important;
     }
-    section[data-testid="stSidebar"] {
-        display: none !important;
-    }
-    
-    /* [2] 상단 헤더 여백 조정 (버튼 삭제로 인한 공백 제거) */
-    .block-container {
-        padding-top: 2rem !important;
+    @media (max-width: 640px) {
+        h1 {
+            font-size: 1.5rem !important;
+            margin-top: 0.5rem !important;
+        }
+        .block-container {
+            padding-top: 2rem !important;
+        }
     }
 
-    /* [3] Expander 아이콘 숨김 (이전 요청사항 유지) */
+    /* [2] 상단 이상한 아이콘 및 사이드바 버튼 숨김 */
+    [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+    section[data-testid="stSidebar"] { display: none !important; }
+
+    /* [3] Expander 아이콘 숨김 */
     div[data-testid="stExpander"] summary span,
-    div[data-testid="stExpander"] summary svg {
-        display: none !important;
-    }
-    div[data-testid="stExpander"] summary {
-        padding-left: 10px !important;
-    }
+    div[data-testid="stExpander"] summary svg { display: none !important; }
+    div[data-testid="stExpander"] summary { padding-left: 10px !important; }
 
-    /* [4] 버튼 디자인 (그라데이션) */
+    /* [4] 버튼 스타일: 기본적으로 내용물 크기에 맞게 */
     div.stButton > button {
-        width: 100%;
+        width: auto !important;
+        padding: 0.4rem 1rem;
+        border-radius: 8px;
+        font-weight: bold;
+        border: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
         color: white !important;
-        border: none;
-        border-radius: 12px;
-        padding: 0.5rem 1rem;
-        font-weight: bold;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    div.stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(0,0,0,0.2);
     }
 
-    /* [5] 로그아웃 버튼 전용 스타일 (빨간색 계열) */
-    div.logout-btn > button {
-        background: linear-gradient(90deg, #cb2d3e 0%, #ef473a 100%) !important;
-        padding: 0.3rem 0.5rem !important;
-        font-size: 14px !important;
-    }
-
-    /* [6] 폼 내부 버튼 (초록색 계열) */
+    /* [5] 폼 내부 버튼은 꽉 차게 (신청/등록 버튼) */
     div[data-testid="stForm"] div.stButton > button {
+        width: 100% !important;
         background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%);
     }
 
-    /* [7] 입력창 둥글게 */
+    /* [6] 로그아웃 버튼 전용 스타일 (작고 빨갛게) */
+    div[data-testid="column"] button[kind="secondary"] {
+        background: #FF4B4B !important;
+        color: white !important;
+        font-size: 12px !important;
+        padding: 0.2rem 0.5rem !important;
+        height: auto !important;
+        min-height: 0px !important;
+    }
+
+    /* [7] 입력창 디자인 */
     .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
-        border-radius: 10px;
+        border-radius: 8px;
     }
     
-    /* [8] 달력 높이 고정 */
-    iframe[title="streamlit_calendar.calendar"] { 
-        height: 750px !important; 
-    }
+    /* [8] 달력 높이 */
+    iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
     
-    /* [9] 폰트 크기 최적화 */
-    p { font-size: 16px; }
+    /* [9] 본문 폰트 */
+    p { font-size: 16px; word-break: keep-all; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -244,21 +242,8 @@ if 'company_name' not in st.session_state:
 COMPANY = st.session_state['company_name']
 
 with main_container.container():
-    # [수정] 사이드바 제거 -> 상단 헤더 바로 대체
-    # 로그아웃 버튼을 우측 상단으로 이동
-    h_col1, h_col2 = st.columns([0.7, 0.3])
-    
-    with h_col1:
-        st.title(f"🏢 {COMPANY}")
-        
-    with h_col2:
-        # 로그아웃 버튼 (CSS 클래스 적용을 위해 컨테이너 사용 가능하나 간단히 버튼 배치)
-        st.write("") # 줄맞춤용 공백
-        if st.button("로그아웃 🚪"):
-            del st.session_state['company_name']
-            if 'logged_in_manager' in st.session_state: del st.session_state['logged_in_manager']
-            st.cache_data.clear()
-            st.rerun()
+    # 상단 헤더
+    st.title(f"🏢 {COMPANY}")
 
     # 상태변수 초기화
     if 'show_sugg_form' not in st.session_state: st.session_state['show_sugg_form'] = False
@@ -299,7 +284,7 @@ with main_container.container():
                     if st.form_submit_button("등록"):
                         save_suggestion(COMPANY, title, content, author, private, pw)
                         st.success("✅ 등록되었습니다.")
-                        time.sleep(1)
+                        tm.sleep(1) # [수정] time -> tm
                         st.session_state['show_sugg_form'] = False; st.rerun()
         
         st.divider()
@@ -320,14 +305,16 @@ with main_container.container():
                             if st.button("🗑️ 삭제", key=f"del_sugg_{idx}"):
                                 delete_row_by_index("건의사항", idx)
                                 st.success("삭제됨")
-                                time.sleep(1); st.rerun()
+                                tm.sleep(1); st.rerun() # [수정] time -> tm
 
     # 3. 근무표
     with tab3:
         c_btn, c_view = st.columns([0.6, 0.4])
-        if c_btn.button("🔄 새로고침", key="cal_ref"): 
-            st.cache_data.clear(); st.session_state['calendar_key'] = str(uuid.uuid4()); st.rerun()
-        view_type = c_view.radio("보기", ["달력", "목록"], horizontal=True, label_visibility="collapsed")
+        with c_btn:
+            if st.button("🔄 새로고침", key="cal_ref"): 
+                st.cache_data.clear(); st.session_state['calendar_key'] = str(uuid.uuid4()); st.rerun()
+        with c_view:
+            view_type = st.radio("보기", ["달력", "목록"], horizontal=True, label_visibility="collapsed")
 
         events = []
         now_kst = datetime.now(KST)
@@ -416,7 +403,7 @@ with main_container.container():
                     st.write("**📆 일시 및 시간 선택 (단일)**")
                     dc1, dc2, dc3 = st.columns(3)
                     d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
-                    t_start = dc2.time_input("시작 시간", value=time(9,0))
+                    t_start = dc2.time_input("시작 시간", value=time(9,0)) # [정상 작동] datetime.time
                     t_end = dc3.time_input("종료 시간", value=time(18,0))
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
                 else:
@@ -447,7 +434,7 @@ with main_container.container():
                         else:
                             save_attendance(COMPANY, name, type_val, final_date_str, reason, pw, approver)
                             st.success(f"✅ 승인 요청 전송 완료")
-                            time.sleep(1.5)
+                            tm.sleep(1.5) # [수정] time -> tm
                             st.session_state['show_attend_form']=False; st.rerun()
         st.divider()
         with st.form("search"):
@@ -479,7 +466,7 @@ with main_container.container():
                             if new_pw == chk_pw and new_pw:
                                 user_db[selected_name] = new_pw
                                 save_user_db(user_db)
-                                st.success("설정 완료!"); time.sleep(1); st.rerun()
+                                st.success("설정 완료!"); tm.sleep(1); st.rerun() # [수정]
                             else: st.error("비밀번호 불일치")
                 else:
                     with st.form("manager_login_form"):
@@ -500,10 +487,15 @@ with main_container.container():
         else:
             manager_id = st.session_state['logged_in_manager']
             manager_name = manager_id
-            c_logout, _ = st.columns([0.2, 0.8])
-            if c_logout.button("로그아웃"):
-                del st.session_state['logged_in_manager']; st.rerun()
-            st.success(f"👋 접속중: {manager_name}")
+            
+            # [수정] 로그아웃 버튼: 작고 심플하게
+            c_info, c_logout = st.columns([0.8, 0.2])
+            with c_info:
+                st.success(f"👋 접속중: {manager_name}")
+            with c_logout:
+                # secondary 타입 + CSS 조합으로 작고 빨간 버튼 구현
+                if st.button("로그아웃", type="secondary"):
+                    del st.session_state['logged_in_manager']; st.rerun()
             
             if manager_id == "MASTER":
                 if st.toggle("🔐 관리자 비밀번호 초기화 (마스터 기능)"):
@@ -515,7 +507,7 @@ with main_container.container():
                         if target != "선택안함":
                             if st.button(f"'{target}' 초기화"):
                                 del user_db[target]; save_user_db(user_db)
-                                st.success("초기화 완료"); time.sleep(1); st.rerun()
+                                st.success("초기화 완료"); tm.sleep(1); st.rerun() # [수정]
 
             m_tab1, m_tab2, m_tab3 = st.tabs(["✅ 결재", "📢 공지/일정", "📊 통계"])
             with m_tab1:
@@ -545,10 +537,10 @@ with main_container.container():
                                         update_attendance_step("근태신청", i, "최종승인대기", "MASTER")
                                     else: 
                                         update_attendance_step("근태신청", i, "2차승인대기", "반장")
-                                    st.success("승인됨"); time.sleep(1); st.rerun()
+                                    st.success("승인됨"); tm.sleep(1); st.rerun() # [수정]
                                 if c_rej.button("반려", key=f"rej_{i}"):
                                     update_attendance_step("근태신청", i, "반려")
-                                    st.error("반려됨"); time.sleep(1); st.rerun()
+                                    st.error("반려됨"); tm.sleep(1); st.rerun() # [수정]
                 else: st.info("데이터 없음")
 
             with m_tab2:
@@ -562,7 +554,7 @@ with main_container.container():
                     if st.form_submit_button("등록"):
                         if type_sel == "공지사항": save_notice(COMPANY, t, c, is_imp)
                         else: save_schedule(COMPANY, str(d_s), t, c, manager_name)
-                        st.success("등록 완료"); time.sleep(1); st.rerun()
+                        st.success("등록 완료"); tm.sleep(1); st.rerun() # [수정]
             with m_tab3:
                 st.write("### 📊 월별 연차 사용 현황")
                 df = load_data("근태신청", COMPANY)
