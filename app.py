@@ -126,7 +126,7 @@ JANGAN_FOREMEN = ["JK 조장", "JX 메인 조장", "JX 어퍼 조장", "MX5 조�
 JANGAN_MID = ["반장"]
 
 # 2. 울산 제이유 관리자 목록
-ULSAN_APPROVERS = ["김대환", "김범진", "홍승곤"]
+ULSAN_APPROVERS = ["김대환", "김범진", "홍성곤"]
 
 ALL_MANAGERS = JANGAN_FOREMEN + JANGAN_MID + ULSAN_APPROVERS + ["MASTER"]
 
