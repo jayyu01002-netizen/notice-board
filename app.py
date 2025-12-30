@@ -23,7 +23,7 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 모바일 상단 잘림 해결 (여백 확보)
+# [스타일] CSS: 모바일 상단 잘림 해결 (여백 대폭 확보)
 # =========================================================
 st.markdown("""
 <style>
@@ -32,8 +32,8 @@ st.markdown("""
     
     @media (max-width: 640px) {
         h1 { font-size: 1.5rem !important; margin-top: 0.5rem !important; }
-        /* [핵심 수정] 모바일에서 상단 여백을 2rem -> 5rem으로 늘려 잘림 방지 */
-        .block-container { padding-top: 5rem !important; } 
+        /* [핵심 수정] 상단 여백을 7rem으로 더 늘려 모바일 주소창에 가려지지 않게 함 */
+        .block-container { padding-top: 7rem !important; } 
     }
 
     /* [2] 상단 불필요 요소 숨김 */
@@ -121,13 +121,9 @@ st.markdown("""
 # =========================================================
 # [설정] 관리자 및 회사 정보
 # =========================================================
-# 1. 장안 제이유 관리자 목록
 JANGAN_FOREMEN = ["JK 조장", "JX 메인 조장", "JX 어퍼 조장", "MX5 조장", "피더 조장"]
 JANGAN_MID = ["반장"]
-
-# 2. 울산 제이유 관리자 목록 (오타 수정됨: 홍성곤 -> 홍승곤)
 ULSAN_APPROVERS = ["김대환", "김범진", "홍승곤"]
-
 ALL_MANAGERS = JANGAN_FOREMEN + JANGAN_MID + ULSAN_APPROVERS + ["MASTER"]
 
 COMPANIES = {
@@ -190,7 +186,6 @@ def load_data(sheet_name, company_name):
                 
         df = df.astype(str)
         
-        # [데이터 안전장치] 공백 제거
         for col in df.columns:
             if df[col].dtype == object:
                 df[col] = df[col].str.strip()
@@ -512,7 +507,7 @@ with main_container.container():
         if 'logged_in_manager' not in st.session_state:
             user_db = load_user_db()
             
-            # [핵심 수정] 관리자 목록 분기 처리 (회사별로 다른 목록 보여주기)
+            # [핵심 수정] 관리자 목록 분기 처리
             if COMPANY == "장안 제이유":
                 # 장안: 조장 + 반장 + MASTER
                 manager_options = ["선택안함"] + JANGAN_FOREMEN + JANGAN_MID + ["MASTER"]
@@ -647,13 +642,21 @@ with main_container.container():
                         if name not in stats_data: stats_data[name] = {}
                         for mon, val in usage.items():
                             stats_data[name][mon] = stats_data[name].get(mon, 0) + val
+                    
                     if stats_data:
                         final_list = []
                         for name, mon_data in stats_data.items():
                             for mon, val in mon_data.items():
                                 final_list.append({"이름": name, "월": mon, "사용일수": val})
-                        stat_df = pd.DataFrame(final_list)
-                        pivot = stat_df.pivot_table(index="이름", columns="월", values="사용일수", aggfunc="sum", fill_value=0)
-                        st.dataframe(pivot)
+                        
+                        # [오류 해결] 명시적으로 컬럼을 지정하여 빈 데이터 프레임 생성 방지
+                        stat_df = pd.DataFrame(final_list, columns=["이름", "월", "사용일수"])
+                        
+                        # 데이터가 있을 때만 피벗 시도
+                        if not stat_df.empty:
+                            pivot = stat_df.pivot_table(index="이름", columns="월", values="사용일수", aggfunc="sum", fill_value=0)
+                            st.dataframe(pivot)
+                        else:
+                            st.info("집계할 데이터가 부족합니다.")
                     else: st.info("집계 데이터 없음")
                 else: st.info("데이터 없음")
