@@ -23,29 +23,21 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 다크모드 강제 해제 & 슬라이드 탭 메뉴 적용
+# [스타일] CSS: 오류 해결 (아이콘 깨짐 방지 + 스크롤바 숨김)
 # =========================================================
 st.markdown("""
 <style>
-    /* [1] 다크모드 원천 차단 (라이트 모드 색상 강제 지정) */
-    :root {
-        --primary-color: #ef4444;
-        --background-color: #ffffff;
-        --secondary-background-color: #f9fafb;
-        --text-color: #1f2937;
-        --font: 'Pretendard', sans-serif;
-    }
-    
-    /* 기본 배경 및 폰트 설정 */
+    /* [1] 전체 테마 강제 설정 (라이트 모드 고정) */
     .stApp {
-        background-color: var(--background-color) !important;
-        color: var(--text-color) !important;
+        background-color: #ffffff !important;
+        color: #333333 !important;
     }
-    
-    /* 모든 텍스트 강제 검정 (드롭다운, 입력창 포함) */
-    h1, h2, h3, h4, h5, h6, p, div, span, label, li, input, textarea, select, button {
-        color: #1f2937 !important;
+
+    /* [중요] 폰트 적용 대상 제한 (아이콘 깨짐 방지) */
+    /* 모든 요소에 폰트를 적용하면 아이콘이 깨지므로, 텍스트 요소에만 적용 */
+    h1, h2, h3, h4, h5, h6, p, li, input, textarea, button {
         font-family: 'Pretendard', sans-serif !important;
+        color: #333333 !important;
     }
 
     /* [2] 모바일 상단 여백 (제목 잘림 방지) */
@@ -64,10 +56,9 @@ st.markdown("""
     section[data-testid="stSidebar"] { display: none !important; }
     
     /* ================================================================
-       [4] ★ 핵심: 앱 스타일 슬라이드 탭 메뉴 (Red Underline) ★ 
+       [4] ★ 앱 스타일 슬라이드 탭 (스크롤바 숨김 + 터치 슬라이드) ★ 
        ================================================================
     */
-    /* 라디오 버튼 컨테이너 -> 가로 스크롤 탭바로 변신 */
     [data-testid="stRadio"] > div {
         display: flex;
         flex-direction: row;
@@ -75,10 +66,18 @@ st.markdown("""
         overflow-x: auto;
         gap: 0px;
         background: white !important;
-        border-bottom: 2px solid #f3f4f6; /* 하단 전체 회색 라인 */
+        border-bottom: 2px solid #f3f4f6;
         padding-bottom: 0px !important;
         margin-bottom: 15px;
-        -webkit-overflow-scrolling: touch; /* 부드러운 스크롤 */
+        -webkit-overflow-scrolling: touch;
+        
+        /* [핵심 수정] 스크롤바 숨기기 */
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+    }
+    /* 크롬, 사파리, 오페라 스크롤바 숨기기 */
+    [data-testid="stRadio"] > div::-webkit-scrollbar {
+        display: none;
     }
 
     /* 개별 메뉴 아이템 (라벨) */
@@ -87,57 +86,47 @@ st.markdown("""
         border: none !important;
         box-shadow: none !important;
         margin: 0 !important;
-        padding: 10px 16px !important; /* 터치 영역 확보 */
-        border-radius: 0 !important;
+        padding: 10px 16px !important;
         cursor: pointer;
         transition: all 0.2s ease;
         min-width: fit-content;
-        border-bottom: 3px solid transparent !important; /* 밑줄 자리 확보 */
+        border-bottom: 3px solid transparent !important;
     }
 
-    /* 라디오 버튼 동그라미 숨기기 (핵심) */
-    [data-testid="stRadio"] label > div:first-child {
-        display: none !important;
-    }
-
-    /* 텍스트 스타일 (기본: 연한 회색) */
+    /* 라디오 버튼 동그라미 숨김 */
+    [data-testid="stRadio"] label > div:first-child { display: none !important; }
+    
+    /* 텍스트 스타일 (기본) */
     [data-testid="stRadio"] label p {
         color: #9ca3af !important; 
         font-weight: 600 !important;
         font-size: 16px !important;
-        margin: 0 !important;
     }
-
-    /* [선택된 상태] :has 선택자 사용 (브라우저 표준) */
-    /* 선택된 탭: 빨간 밑줄 */
+    
+    /* 선택된 탭 스타일 */
     [data-testid="stRadio"] label:has(input:checked) {
         border-bottom: 3px solid #ef4444 !important; 
     }
-    
-    /* 선택된 탭: 진한 빨간/검정 글씨 */
     [data-testid="stRadio"] label:has(input:checked) p {
         color: #ef4444 !important; 
         font-weight: 800 !important;
     }
 
-    /* [5] 입력창 및 드롭다운 (다크모드 안보임 해결) */
-    .stTextInput > div > div > input {
+    /* [5] 입력창 및 버튼 디자인 */
+    .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
         background-color: #ffffff !important;
-        color: #1f2937 !important;
+        color: #333333 !important;
         border: 1px solid #e5e7eb !important;
+        border-radius: 8px;
     }
-    .stSelectbox > div > div > div {
+    /* 팝업 메뉴 (다크모드 오류 방지) */
+    div[data-baseweb="popover"], div[data-baseweb="menu"] {
         background-color: #ffffff !important;
-        color: #1f2937 !important;
-        border: 1px solid #e5e7eb !important;
     }
-    /* 드롭다운 메뉴 아이템 색상 강제 */
-    div[data-baseweb="popover"] li, div[data-baseweb="popover"] div {
-        color: #1f2937 !important;
-        background-color: #ffffff !important;
+    div[data-baseweb="popover"] div, div[data-baseweb="menu"] div {
+        color: #333333 !important;
     }
 
-    /* [6] 버튼 디자인 */
     div.stButton > button {
         width: 100% !important;        
         border-radius: 8px !important;
@@ -148,16 +137,23 @@ st.markdown("""
         padding: 0.6rem !important;
         box-shadow: none !important;
     }
-    /* 포인트 버튼 (빨강) */
-    div[data-testid="stForm"] div.stButton > button {
+    /* 중요 버튼 (빨강) */
+    div[data-testid="stForm"] div.stButton > button,
+    div[data-testid="column"] button[kind="secondary"] {
         background: #ef4444 !important; 
         color: white !important;
         border: none !important;
     }
-    div[data-testid="column"] button[kind="secondary"] {
-        background: #ef4444 !important;
-        color: white !important;
-        border: none !important;
+
+    /* [6] Expander 헤더 (화살표 텍스트 흐름 해결) */
+    .streamlit-expanderHeader p {
+        font-size: 15px !important;
+        font-weight: 600 !important;
+        color: #333333 !important;
+    }
+    /* 아이콘 색상 강제 지정 */
+    .streamlit-expanderHeader svg {
+        fill: #333333 !important;
     }
 
     /* [7] 달력 스타일 */
@@ -635,6 +631,7 @@ with main_container.container():
             manager_id = st.session_state['logged_in_manager']
             manager_name = manager_id
             
+            # 로그아웃 버튼 공간 확보
             c_info, c_logout = st.columns([0.75, 0.25])
             with c_info:
                 st.success(f"👋 접속중: {manager_name}")
@@ -674,12 +671,14 @@ with main_container.container():
                             pend = df[df['상태'] == '승인대기']
                             st.info("📢 전체 승인 대기 (Master 권한)")
                         elif manager_id in ULSAN_APPROVERS:
+                            # [핵심] 공백 제거를 통한 안전한 매칭
                             pend = df[(df['상태'] == '승인대기') & (df['승인담당자'].str.strip() == manager_name.strip())]
                             st.info(f"📢 {manager_name}님 승인 대기")
 
                     if pend.empty: st.info("대기중인 건이 없습니다.")
                     else:
                         for i, r in pend.iterrows():
+                            # Expander 내부 텍스트 흐름 문제 해결을 위한 내용 표시 방식
                             with st.expander(f"[{r['이름']}] {r['구분']} - {r['날짜및시간']}"):
                                 st.write(f"사유: {r['사유']}")
                                 c_app, c_rej = st.columns(2)
@@ -692,6 +691,7 @@ with main_container.container():
                                         else: 
                                             update_attendance_step("근태신청", i, "2차승인대기", "반장")
                                     else:
+                                        # 울산: 즉시 최종승인
                                         update_attendance_step("근태신청", i, "최종승인")
                                     st.success("승인됨"); tm.sleep(1); st.rerun()
                                     
@@ -739,7 +739,9 @@ with main_container.container():
                 if not df_sch.empty:
                     for i, r in df_sch.iterrows():
                         if manager_id == "MASTER" or r['작성자'] == manager_name:
-                            with st.expander(f"{r['날짜']} : {r['제목']}"):
+                            # Expander 제목 흐름 방지 (아이콘 제거 대신 텍스트로 처리)
+                            title_text = f"{r['날짜']} : {r['제목']}"
+                            with st.expander(title_text):
                                 existing_title = str(r['제목'])
                                 is_red = False
                                 clean_title = existing_title
