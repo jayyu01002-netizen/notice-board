@@ -23,7 +23,7 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 디자인 유지 + 모바일 상단 잘림 해결
+# [스타일] CSS: 달력 제목 검정색 변경 + 기존 디자인 유지
 # =========================================================
 st.markdown("""
 <style>
@@ -32,7 +32,6 @@ st.markdown("""
     
     @media (max-width: 640px) {
         h1 { font-size: 1.5rem !important; margin-top: 0.5rem !important; }
-        /* 모바일 상단 여백 넉넉하게 확보 (주소창 가림 방지) */
         .block-container { padding-top: 7rem !important; } 
     }
 
@@ -116,9 +115,15 @@ st.markdown("""
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
     p { font-size: 16px; word-break: keep-all; }
 
-    /* [8] 달력 글씨색 수정 (잘 보이게) */
-    .fc-toolbar-title { color: #333333 !important; font-weight: bold !important; }
+    /* [8] 달력 헤더(월/년) 글씨색 검정색으로 강제 지정 (핵심 수정) */
+    .fc-toolbar-title { 
+        color: #333333 !important; 
+        font-weight: 800 !important; /* 폰트도 조금 더 굵게 */
+    }
+    /* 달력 내부 버튼 텍스트 등도 잘 보이게 */
     .fc-button { color: #333333 !important; }
+    .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; }
+    .fc-daygrid-day-number { color: #333333 !important; text-decoration: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -227,7 +232,6 @@ def update_attendance_step(sheet_name, row_idx, new_status, next_approver=None):
     if next_approver: sheet.update_cell(row_idx + 2, 9, next_approver)
     st.cache_data.clear()
 
-# [추가] 데이터 삭제 및 수정 함수
 def delete_row_by_index(sheet_name, row_idx):
     sheet = get_worksheet(sheet_name)
     sheet.delete_rows(row_idx + 2)
@@ -314,14 +318,12 @@ with main_container.container():
                     st.caption(f"📅 {row['작성일']}")
                     st.markdown(f"{row['내용']}")
                     
-                    # [추가] 마스터 권한일 때 수정/삭제 메뉴 노출
                     if st.session_state.get('logged_in_manager') == "MASTER":
                         with st.expander("🛠️ 관리자 메뉴 (수정/삭제)"):
                             u_title = st.text_input("제목 수정", value=row['제목'], key=f"edit_t_{idx}")
                             u_content = st.text_area("내용 수정", value=row['내용'], key=f"edit_c_{idx}")
                             c1, c2 = st.columns(2)
                             if c1.button("💾 수정 저장", key=f"save_{idx}"):
-                                # 제목(3열), 내용(4열) 업데이트
                                 update_data_cell("공지사항", idx, 3, u_title)
                                 update_data_cell("공지사항", idx, 4, u_content)
                                 st.success("수정 완료"); tm.sleep(1); st.rerun()
@@ -362,7 +364,6 @@ with main_container.container():
                         st.caption(f"작성자: {row['작성자']}")
                         if show_content: st.write(row['내용'])
                         
-                        # [수정/삭제] 마스터 권한 메뉴
                         if st.session_state.get('logged_in_manager') == "MASTER":
                             with st.expander("🛠️ 관리자 메뉴 (수정/삭제)"):
                                 u_s_title = st.text_input("제목 수정", value=row['제목'], key=f"edit_st_{idx}")
@@ -505,7 +506,6 @@ with main_container.container():
                     pw = c2.text_input("비밀번호(본인확인용)", type="password")
                     type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근"])
                     
-                    # 회사별 승인자 분기 처리
                     if COMPANY == "장안 제이유":
                         approver_options = JANGAN_FOREMEN + JANGAN_MID
                     else:
@@ -579,7 +579,6 @@ with main_container.container():
             manager_id = st.session_state['logged_in_manager']
             manager_name = manager_id
             
-            # 로그아웃 버튼 공간 확보
             c_info, c_logout = st.columns([0.75, 0.25])
             with c_info:
                 st.success(f"👋 접속중: {manager_name}")
