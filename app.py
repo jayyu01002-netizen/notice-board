@@ -34,22 +34,24 @@ COMPANIES = {
     "0645": "울산 제이유"
 }
 
-# --- [스타일] CSS (디자인 대폭 업그레이드 + 달력 글씨 수정) ---
+# --- [스타일] CSS (모바일 반응형 + 디자인 업그레이드) ---
 st.markdown("""
 <style>
-    /* 전체 폰트 및 배경 설정 */
-    div[data-testid="stMarkdownContainer"] p { font-size: 18px !important; line-height: 1.6; }
+    /* [1] 기본 폰트 설정 (너무 강제하지 않도록 수정하여 아이콘 깨짐 방지) */
+    .stMarkdown p { font-size: 18px; line-height: 1.6; }
     div[data-testid="stMetricValue"] { font-size: 24px !important; color: #FF4B4B !important; }
+    
+    /* 달력 높이 고정 */
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; min-height: 750px !important; }
 
-    /* [1] 일반 버튼 스타일 (블루-퍼플 그라데이션) */
+    /* [2] 일반 버튼 스타일 (블루-퍼플 그라데이션 + 둥근 모서리) */
     div.stButton > button {
         width: 100%;
         background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
         color: white !important;
         border: none;
         border-radius: 12px;
-        padding: 0.5rem 1rem;
+        padding: 0.6rem 1rem;
         font-weight: bold;
         transition: all 0.3s ease;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -60,7 +62,7 @@ st.markdown("""
         background: linear-gradient(90deg, #5b7cd7 0%, #283858 100%);
     }
 
-    /* [2] 폼 제출 버튼 스타일 (그린 그라데이션) */
+    /* [3] 폼 제출 버튼 스타일 (그린 그라데이션) */
     div[data-testid="stForm"] div.stButton > button {
         background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%);
         color: white !important;
@@ -71,9 +73,29 @@ st.markdown("""
         box-shadow: 0 0 15px rgba(56, 239, 125, 0.4);
     }
 
-    /* [3] 입력창 스타일 */
+    /* [4] 입력창 스타일 */
     .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
         border-radius: 10px;
+    }
+
+    /* [5] 모바일 전용 반응형 스타일 (화면 폭 600px 이하일 때 적용) */
+    @media only screen and (max-width: 600px) {
+        /* 상단 여백 확보 및 패딩 조절 */
+        .block-container {
+            padding-top: 3rem !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+        }
+        /* 제목 폰트 크기 줄임 */
+        h1 { font-size: 1.8rem !important; }
+        h2 { font-size: 1.5rem !important; }
+        h3 { font-size: 1.2rem !important; }
+        
+        /* 본문 폰트 크기 최적화 */
+        .stMarkdown p { font-size: 16px !important; }
+        
+        /* 버튼 꽉 차게 */
+        div.stButton > button { width: 100% !important; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -337,7 +359,6 @@ with main_container.container():
                 except: pass
 
         if view_type == "달력":
-            # [수정] 평일(기본) 색상 검정색으로 강제 지정
             calendar_css = """
                 .fc { background: white !important; border-radius: 10px; padding: 10px; }
                 /* 기본 날짜/헤더 색상 (검정) */
