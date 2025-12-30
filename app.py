@@ -9,7 +9,7 @@ import holidays
 from streamlit_calendar import calendar
 import json
 import os
-import time as tm
+import time as tm # [수정1] time 모듈 이름 충돌 방지 (TypeError 해결)
 
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
@@ -34,61 +34,39 @@ COMPANIES = {
     "0645": "울산 제이유"
 }
 
-# --- [스타일] CSS (모바일 깨짐 강력 수정) ---
+# --- [스타일] CSS (모바일 화살표 글씨 제거 + 캘린더 색상) ---
 st.markdown("""
 <style>
     /* [1] 모바일 전용 스타일 (스마트폰 화면) */
     @media only screen and (max-width: 768px) {
-        /* 상단 여백 확보 (제목 겹침 방지) */
+        /* 상단 여백 제거 */
         .block-container {
-            padding-top: 3rem !important;
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
+            padding-top: 1rem !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
         }
         
-        /* [핵심] 깨진 아이콘 텍스트(keyboard_double_arrow...) 숨기기 */
-        /* 사이드바 열기/닫기 버튼 타겟팅 */
-        button[kind="header"] {
-            color: transparent !important; /* 글자 투명하게 */
-        }
-        div[data-testid="stSidebarCollapsedControl"] {
-            color: transparent !important; /* 글자 투명하게 */
+        /* [핵심] 깨지는 화살표 텍스트(keyboard_double...) 숨기기 */
+        [data-testid="stSidebarCollapsedControl"] {
+            color: transparent !important; /* 글씨 투명하게 */
         }
         
-        /* 투명해진 자리에 대체 아이콘(☰) 심기 */
-        div[data-testid="stSidebarCollapsedControl"]::after {
-            content: "☰"; /* 햄버거 메뉴 아이콘 */
-            color: #333333; /* 진한 회색 */
-            font-size: 24px;
+        /* 대신 햄버거 아이콘(☰) 강제 삽입 */
+        [data-testid="stSidebarCollapsedControl"]::after {
+            content: "☰";
+            color: black;
+            font-size: 26px;
             font-weight: bold;
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            text-align: center;
+            left: 0px;
+            top: 0px;
         }
 
-        /* 다른 깨진 아이콘(expander 화살표 등) 방지 */
-        .streamlit-expanderHeader p {
-            font-size: 16px !important;
-        }
-
-        /* 제목 글자 크기 최적화 (한 줄 유지) */
-        h1, h2, h3 { 
-            font-size: 1.3rem !important; 
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
-        }
-        
-        /* 탭 버튼 크기 조절 */
-        .stTabs button {
-            font-size: 13px !important;
-            padding: 8px 4px !important;
-        }
+        /* 제목 글자 크기 최적화 */
+        h2 { font-size: 1.4rem !important; }
     }
 
-    /* [2] PC/모바일 공통 버튼 스타일 */
+    /* [2] 버튼 스타일 */
     div.stButton > button {
         width: 100%;
         background: linear-gradient(90deg, #4b6cb7 0%, #182848 100%);
@@ -98,23 +76,22 @@ st.markdown("""
         font-weight: bold;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
-    
-    /* [3] 폼 제출 버튼 (그린) */
-    div[data-testid="stForm"] div.stButton > button {
-        background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%);
-    }
 
-    /* [4] 달력 글씨 색상 (평일 검정 / 주말 색상) */
+    /* [3] 캘린더 글씨 색상 (평일 검정 / 주말 색상) */
     .fc { background: white !important; border-radius: 10px; padding: 5px; }
+    
+    /* 날짜 숫자 및 요일: 무조건 검정색으로 잘 보이게 */
     .fc-daygrid-day-number, .fc-col-header-cell-cushion {
         color: #000000 !important; 
         font-weight: bold !important; 
         text-decoration: none !important; 
     }
+    /* 일요일 빨강 */
     .fc-day-sun .fc-daygrid-day-number, .fc-day-sun .fc-col-header-cell-cushion { color: #FF4B4B !important; }
+    /* 토요일 파랑 */
     .fc-day-sat .fc-daygrid-day-number, .fc-day-sat .fc-col-header-cell-cushion { color: #1E90FF !important; }
     
-    /* [5] 입력창 둥글게 */
+    /* [4] 입력창 둥글게 */
     .stTextInput input, .stSelectbox div, .stDateInput input, .stTimeInput input {
         border-radius: 8px !important;
     }
@@ -241,8 +218,7 @@ def calculate_leave_usage(date_str, leave_type):
 # ==========================================
 if 'company_name' not in st.session_state:
     with main_container.container():
-        # [모바일용 헤더] 제목을 HTML로 직접 그려서 깨짐 방지
-        st.markdown('<h2 style="text-align:center; font-size:1.5rem;">🏢 제이유 그룹 인트라넷</h2>', unsafe_allow_html=True)
+        st.markdown('<h2 style="text-align:center;">🏢 제이유 그룹 인트라넷</h2>', unsafe_allow_html=True)
         st.write("접속하려는 회사의 코드를 입력해주세요.")
         with st.form("login_form"):
             pw_input = st.text_input("회사 접속 코드", type="password")
@@ -268,8 +244,7 @@ if st.sidebar.button("로그아웃"):
     st.rerun()
 
 with main_container.container():
-    # [모바일용 헤더] 제목 겹침/잘림 방지용 스타일 적용
-    st.markdown(f'<h2 style="text-align:left; font-size:1.4rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">🏢 {COMPANY} 사내광장</h2>', unsafe_allow_html=True)
+    st.markdown(f'<h3 style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">🏢 {COMPANY} 사내광장</h3>', unsafe_allow_html=True)
 
     if 'show_sugg_form' not in st.session_state: st.session_state['show_sugg_form'] = False
     if 'show_attend_form' not in st.session_state: st.session_state['show_attend_form'] = False
@@ -307,7 +282,7 @@ with main_container.container():
                     private = st.checkbox("🔒 비공개")
                     if st.form_submit_button("등록"):
                         save_suggestion(COMPANY, title, content, author, private, pw)
-                        st.success("✅ 제안 내용이 안전하게 등록되었습니다.")
+                        st.success("✅ 등록되었습니다.")
                         tm.sleep(1.2)
                         st.session_state['show_sugg_form']=False; st.rerun()
         st.divider()
@@ -322,7 +297,6 @@ with main_container.container():
                         else: st.write(f"**{row['제목']}**")
                         st.caption(f"작성자: {row['작성자']}")
                         if show_content: st.write(row['내용'])
-                        
                         if st.session_state.get('logged_in_manager') == "MASTER":
                             if st.button("🗑️ 삭제", key=f"del_sugg_{idx}"):
                                 delete_row_by_index("건의사항", idx)
@@ -380,8 +354,15 @@ with main_container.container():
                 except: pass
 
         if view_type == "달력":
-            # 모바일 최적화 CSS 적용됨 (폰트색 검정)
-            cal = calendar(events=events, options={"initialView": "dayGridMonth", "height": 750}, key=st.session_state['calendar_key'])
+            # [핵심] 평일 글씨 검정색 강제 CSS
+            calendar_css = """
+                .fc { background: white !important; border-radius: 10px; padding: 5px; }
+                .fc-daygrid-day-number, .fc-col-header-cell-cushion { color: #000000 !important; text-decoration: none !important; }
+                .fc-day-sun .fc-daygrid-day-number, .fc-day-sun .fc-col-header-cell-cushion { color: #FF4B4B !important; }
+                .fc-day-sat .fc-daygrid-day-number, .fc-day-sat .fc-col-header-cell-cushion { color: #1E90FF !important; }
+                .fc-event { cursor: pointer; }
+            """
+            cal = calendar(events=events, options={"initialView": "dayGridMonth", "height": 750}, key=st.session_state['calendar_key'], custom_css=calendar_css)
             if cal.get("callback") == "eventClick":
                 evt = cal["eventClick"]["event"]
                 props = evt.get("extendedProps", {})
@@ -398,11 +379,7 @@ with main_container.container():
                     if total_usage:
                         st.dataframe(pd.DataFrame(list(total_usage.items()), columns=["월", "사용일수"]).sort_values("월"), hide_index=True)
         else:
-            filtered_events = [e for e in events if e.get("extendedProps", {}).get("type") != "holiday"]
-            if filtered_events:
-                list_df = pd.DataFrame(filtered_events)
-                st.dataframe(list_df, column_config={"color": None, "extendedProps": None, "resourceId": None, "title": "내용", "start": "시작", "end": "종료"}, hide_index=True, use_container_width=True)
-            else: st.info("등록된 일정이 없습니다.")
+            st.dataframe(pd.DataFrame(events))
 
     # 4. 근태신청
     with tab4:
@@ -410,15 +387,13 @@ with main_container.container():
         if st.button("📝 신청서 작성", on_click=toggle_attend): pass
         if st.session_state['show_attend_form']:
             with st.container(border=True):
-                date_mode = st.radio("기간 설정", ["하루/반차/외출 (단일)", "기간 (연차/휴가)"], horizontal=True)
+                date_mode = st.radio("기간 설정", ["하루/반차 (단일)", "기간 (연차/휴가)"], horizontal=True)
                 final_date_str = ""
-                if date_mode == "하루/반차/외출 (단일)":
+                if date_mode == "하루/반차 (단일)":
                     st.write("**📆 일시 및 시간 선택 (단일)**")
                     dc1, dc2, dc3 = st.columns(3)
                     d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
-                    # [수정] time 객체 이름 충돌 해결 (time -> tm 사용 안 함, 그냥 time(9,0)은 datetime.time임)
-                    # 여기서는 그냥 기본값으로 (9,0) 튜플을 쓰거나 time 객체를 써야 함
-                    # 상단 import datetime, time 때문에 충돌했던 것을 -> tm으로 바꿨으니 아래처럼 써야 함
+                    # [수정] time(9,0) 충돌 방지 (기본 함수 사용)
                     t_start = dc2.time_input("시작 시간", value=time(9,0))
                     t_end = dc3.time_input("종료 시간", value=time(18,0))
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
@@ -447,9 +422,8 @@ with main_container.container():
                         if not name or not pw: st.error("이름과 비밀번호를 입력해주세요.")
                         else:
                             save_attendance(COMPANY, name, type_val, final_date_str, reason, pw, approver)
-                            st.success(f"✅ {approver}님에게 승인 요청이 전송되었습니다.")
-                            tm.sleep(1.5)
-                            st.session_state['show_attend_form']=False; st.rerun()
+                            st.success(f"✅ {approver}님에게 승인 요청되었습니다.")
+                            tm.sleep(1.5); st.session_state['show_attend_form']=False; st.rerun()
         st.divider()
         with st.form("search"):
             sc1, sc2 = st.columns(2)
@@ -521,7 +495,7 @@ with main_container.container():
             m_tab1, m_tab2, m_tab3 = st.tabs(["✅ 결재 관리", "📢 공지/일정", "📊 통계"])
             with m_tab1:
                 df = load_data("근태신청", COMPANY)
-                # [수정] KeyError 방지를 위해 '승인담당자' 컬럼이 있는지 확인
+                # [수정] KeyError 방지를 위해 '승인담당자' 컬럼 확인
                 if not df.empty and '상태' in df.columns and '승인담당자' in df.columns:
                     pend = pd.DataFrame()
                     if manager_id == "MASTER":
