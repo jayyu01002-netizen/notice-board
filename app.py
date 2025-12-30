@@ -23,7 +23,7 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 달력 제목 검정색 변경 + 기존 디자인 유지
+# [스타일] CSS: 레이아웃 및 모바일 최적화 (달력 CSS는 아래쪽 로직에 직접 넣음)
 # =========================================================
 st.markdown("""
 <style>
@@ -32,6 +32,7 @@ st.markdown("""
     
     @media (max-width: 640px) {
         h1 { font-size: 1.5rem !important; margin-top: 0.5rem !important; }
+        /* 모바일 상단 여백 넉넉하게 확보 */
         .block-container { padding-top: 7rem !important; } 
     }
 
@@ -114,16 +115,6 @@ st.markdown("""
     }
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
     p { font-size: 16px; word-break: keep-all; }
-
-    /* [8] 달력 헤더(월/년) 글씨색 검정색으로 강제 지정 (핵심 수정) */
-    .fc-toolbar-title { 
-        color: #333333 !important; 
-        font-weight: 800 !important; /* 폰트도 조금 더 굵게 */
-    }
-    /* 달력 내부 버튼 텍스트 등도 잘 보이게 */
-    .fc-button { color: #333333 !important; }
-    .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; }
-    .fc-daygrid-day-number { color: #333333 !important; text-decoration: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -433,16 +424,20 @@ with main_container.container():
                 except: pass
 
         if view_type == "달력":
+            # [핵심 수정] 달력 내부 아이프레임에 적용될 CSS (제목 색상 #333333)
             calendar_css = """
                 .fc { background: white !important; }
+                .fc-toolbar-title { color: #333333 !important; font-weight: bold !important; font-size: 1.5rem !important; }
+                .fc-button { color: #333333 !important; border: 1px solid #ddd !important; }
                 .fc-daygrid-day-number { color: #333333 !important; text-decoration: none !important; }
-                .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; }
+                .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; font-weight: bold !important; }
                 .fc-day-sun .fc-daygrid-day-number { color: #FF4B4B !important; }
                 .fc-day-sun .fc-col-header-cell-cushion { color: #FF4B4B !important; }
                 .fc-day-sat .fc-daygrid-day-number { color: #1E90FF !important; }
                 .fc-day-sat .fc-col-header-cell-cushion { color: #1E90FF !important; }
             """
             cal = calendar(events=events, options={"initialView": "dayGridMonth", "height": 750}, key=st.session_state['calendar_key'], custom_css=calendar_css)
+            
             if cal.get("callback") == "eventClick":
                 evt = cal["eventClick"]["event"]
                 props = evt.get("extendedProps", {})
@@ -579,6 +574,7 @@ with main_container.container():
             manager_id = st.session_state['logged_in_manager']
             manager_name = manager_id
             
+            # 로그아웃 버튼 공간 확보
             c_info, c_logout = st.columns([0.75, 0.25])
             with c_info:
                 st.success(f"👋 접속중: {manager_name}")
