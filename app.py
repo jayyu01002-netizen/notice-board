@@ -23,16 +23,16 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 모바일 상단 잘림 해결 (여백 대폭 확보)
+# [스타일] CSS: 디자인 유지 + 모바일 상단 잘림 해결
 # =========================================================
 st.markdown("""
 <style>
-    /* [1] 제목(h1) 및 상단 여백 설정 (수정됨) */
+    /* [1] 제목(h1) 및 상단 여백 설정 (모바일 최적화) */
     h1 { padding-top: 1rem !important; font-size: 2rem !important; }
     
     @media (max-width: 640px) {
         h1 { font-size: 1.5rem !important; margin-top: 0.5rem !important; }
-        /* [핵심 수정] 상단 여백을 7rem으로 더 늘려 모바일 주소창에 가려지지 않게 함 */
+        /* 모바일 상단 여백 넉넉하게 확보 (주소창 가림 방지) */
         .block-container { padding-top: 7rem !important; } 
     }
 
@@ -73,7 +73,7 @@ st.markdown("""
         display: none !important;
     }
 
-    /* [4] 일반 버튼 (새로고침 등) -> 줄바꿈 절대 방지 */
+    /* [4] 일반 버튼 */
     div.stButton > button {
         width: 100% !important;        
         padding: 0.3rem 0.5rem !important;
@@ -84,14 +84,14 @@ st.markdown("""
         border: 1px solid #444444 !important;
         box-shadow: none !important;
         margin-top: 5px !important;
-        white-space: nowrap !important;  /* [핵심] 글자 줄바꿈 금지 */
+        white-space: nowrap !important;
     }
     div.stButton > button:hover {
         background: #000000 !important;
         color: #ffffff !important;
     }
 
-    /* [5] 폼 내부 버튼 (신청/등록) */
+    /* [5] 폼 내부 버튼 */
     div[data-testid="stForm"] div.stButton > button {
         width: 100% !important;
         padding: 0.5rem 1rem !important;
@@ -101,7 +101,7 @@ st.markdown("""
         border: none !important;
     }
 
-    /* [6] 로그아웃 버튼 -> 빨간색 */
+    /* [6] 로그아웃/삭제 버튼 (빨간색) */
     div[data-testid="column"] button[kind="secondary"] {
         background: #FF4B4B !important;
         color: white !important;
@@ -115,6 +115,10 @@ st.markdown("""
     }
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
     p { font-size: 16px; word-break: keep-all; }
+
+    /* [8] 달력 글씨색 수정 (잘 보이게) */
+    .fc-toolbar-title { color: #333333 !important; font-weight: bold !important; }
+    .fc-button { color: #333333 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -185,10 +189,8 @@ def load_data(sheet_name, company_name):
                 if col not in df.columns: df[col] = ""
                 
         df = df.astype(str)
-        
         for col in df.columns:
-            if df[col].dtype == object:
-                df[col] = df[col].str.strip()
+            if df[col].dtype == object: df[col] = df[col].str.strip()
 
         if '소속' in df.columns:
             df = df[df['소속'] == company_name.strip()]
@@ -225,9 +227,15 @@ def update_attendance_step(sheet_name, row_idx, new_status, next_approver=None):
     if next_approver: sheet.update_cell(row_idx + 2, 9, next_approver)
     st.cache_data.clear()
 
+# [추가] 데이터 삭제 및 수정 함수
 def delete_row_by_index(sheet_name, row_idx):
     sheet = get_worksheet(sheet_name)
     sheet.delete_rows(row_idx + 2)
+    st.cache_data.clear()
+
+def update_data_cell(sheet_name, row_idx, col_idx, new_value):
+    sheet = get_worksheet(sheet_name)
+    sheet.update_cell(row_idx + 2, col_idx, new_value)
     st.cache_data.clear()
 
 def calculate_leave_usage(date_str, leave_type):
@@ -305,6 +313,21 @@ with main_container.container():
                     else: st.subheader(f"📌 {row['제목']}")
                     st.caption(f"📅 {row['작성일']}")
                     st.markdown(f"{row['내용']}")
+                    
+                    # [추가] 마스터 권한일 때 수정/삭제 메뉴 노출
+                    if st.session_state.get('logged_in_manager') == "MASTER":
+                        with st.expander("🛠️ 관리자 메뉴 (수정/삭제)"):
+                            u_title = st.text_input("제목 수정", value=row['제목'], key=f"edit_t_{idx}")
+                            u_content = st.text_area("내용 수정", value=row['내용'], key=f"edit_c_{idx}")
+                            c1, c2 = st.columns(2)
+                            if c1.button("💾 수정 저장", key=f"save_{idx}"):
+                                # 제목(3열), 내용(4열) 업데이트
+                                update_data_cell("공지사항", idx, 3, u_title)
+                                update_data_cell("공지사항", idx, 4, u_content)
+                                st.success("수정 완료"); tm.sleep(1); st.rerun()
+                            if c2.button("🗑️ 삭제", key=f"del_{idx}", type="secondary"):
+                                delete_row_by_index("공지사항", idx)
+                                st.success("삭제 완료"); tm.sleep(1); st.rerun()
 
     # 2. 제안
     elif selected_tab == "🗣️ 제안":
@@ -339,11 +362,19 @@ with main_container.container():
                         st.caption(f"작성자: {row['작성자']}")
                         if show_content: st.write(row['내용'])
                         
+                        # [수정/삭제] 마스터 권한 메뉴
                         if st.session_state.get('logged_in_manager') == "MASTER":
-                            if st.button("🗑️ 삭제", key=f"del_sugg_{idx}"):
-                                delete_row_by_index("건의사항", idx)
-                                st.success("삭제됨")
-                                tm.sleep(1); st.rerun()
+                            with st.expander("🛠️ 관리자 메뉴 (수정/삭제)"):
+                                u_s_title = st.text_input("제목 수정", value=row['제목'], key=f"edit_st_{idx}")
+                                u_s_content = st.text_area("내용 수정", value=row['내용'], key=f"edit_sc_{idx}")
+                                c1, c2 = st.columns(2)
+                                if c1.button("💾 수정 저장", key=f"save_s_{idx}"):
+                                    update_data_cell("건의사항", idx, 3, u_s_title)
+                                    update_data_cell("건의사항", idx, 4, u_s_content)
+                                    st.success("수정 완료"); tm.sleep(1); st.rerun()
+                                if c2.button("🗑️ 삭제", key=f"del_sugg_{idx}", type="secondary"):
+                                    delete_row_by_index("건의사항", idx)
+                                    st.success("삭제 완료"); tm.sleep(1); st.rerun()
 
     # 3. 근무표
     elif selected_tab == "📆 근무표":
@@ -426,6 +457,8 @@ with main_container.container():
                     st.write(f"📊 **{name}님의 월별 실사용 현황**")
                     if total_usage:
                         st.dataframe(pd.DataFrame(list(total_usage.items()), columns=["월", "사용일수"]).sort_values("월"), hide_index=True)
+                    else:
+                        st.info("집계된 사용 내역이 없습니다.")
         else:
             filtered_events = [e for e in events if e.get("extendedProps", {}).get("type") != "holiday"]
             if filtered_events:
@@ -507,12 +540,9 @@ with main_container.container():
         if 'logged_in_manager' not in st.session_state:
             user_db = load_user_db()
             
-            # [핵심 수정] 관리자 목록 분기 처리
             if COMPANY == "장안 제이유":
-                # 장안: 조장 + 반장 + MASTER
                 manager_options = ["선택안함"] + JANGAN_FOREMEN + JANGAN_MID + ["MASTER"]
             else:
-                # 울산: 김대환, 김범진, 홍성곤 + MASTER
                 manager_options = ["선택안함"] + ULSAN_APPROVERS + ["MASTER"]
 
             selected_name = st.selectbox("관리자 선택", manager_options)
@@ -589,14 +619,12 @@ with main_container.container():
                             pend = df[df['상태'] == '승인대기']
                             st.info("📢 전체 승인 대기 (Master 권한)")
                         elif manager_id in ULSAN_APPROVERS:
-                            # [핵심] 공백 제거를 통한 안전한 매칭
                             pend = df[(df['상태'] == '승인대기') & (df['승인담당자'].str.strip() == manager_name.strip())]
                             st.info(f"📢 {manager_name}님 승인 대기")
 
                     if pend.empty: st.info("대기중인 건이 없습니다.")
                     else:
                         for i, r in pend.iterrows():
-                            # [핵심] Expander 제목이 이제 정상적으로 보일 것입니다.
                             with st.expander(f"[{r['이름']}] {r['구분']} - {r['날짜및시간']}"):
                                 st.write(f"사유: {r['사유']}")
                                 c_app, c_rej = st.columns(2)
@@ -609,7 +637,6 @@ with main_container.container():
                                         else: 
                                             update_attendance_step("근태신청", i, "2차승인대기", "반장")
                                     else:
-                                        # 울산: 즉시 최종승인
                                         update_attendance_step("근태신청", i, "최종승인")
                                     st.success("승인됨"); tm.sleep(1); st.rerun()
                                     
@@ -649,14 +676,17 @@ with main_container.container():
                             for mon, val in mon_data.items():
                                 final_list.append({"이름": name, "월": mon, "사용일수": val})
                         
-                        # [오류 해결] 명시적으로 컬럼을 지정하여 빈 데이터 프레임 생성 방지
-                        stat_df = pd.DataFrame(final_list, columns=["이름", "월", "사용일수"])
-                        
-                        # 데이터가 있을 때만 피벗 시도
-                        if not stat_df.empty:
-                            pivot = stat_df.pivot_table(index="이름", columns="월", values="사용일수", aggfunc="sum", fill_value=0)
-                            st.dataframe(pivot)
-                        else:
-                            st.info("집계할 데이터가 부족합니다.")
+                        try:
+                            stat_df = pd.DataFrame(final_list, columns=["이름", "월", "사용일수"])
+                            if not stat_df.empty:
+                                pivot = stat_df.pivot_table(index="이름", columns="월", values="사용일수", aggfunc="sum", fill_value=0)
+                                st.dataframe(pivot)
+                            else:
+                                st.info("집계할 데이터가 부족합니다.")
+                        except Exception as e:
+                            st.warning("⚠️ 통계 집계 중 오류가 발생했습니다. 아래 원본 데이터를 확인해주세요.")
+                            if final_list: st.dataframe(pd.DataFrame(final_list))
+                            else: st.error(f"오류 상세: {e}")
+
                     else: st.info("집계 데이터 없음")
                 else: st.info("데이터 없음")
