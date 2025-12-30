@@ -7,7 +7,7 @@ import uuid
 import pytz
 import holidays
 from streamlit_calendar import calendar
-import time as tm  # [수정] 이름 충돌 방지를 위해 'tm'으로 변경
+import time as tm
 
 # =========================================================
 # [설정] 페이지 기본 설정
@@ -27,22 +27,14 @@ KST = pytz.timezone('Asia/Seoul')
 # =========================================================
 st.markdown("""
 <style>
-    /* [1] 제목(h1) 모바일 최적화 (글자 겹침/잘림 방지) */
-    h1 {
-        padding-top: 1rem !important;
-        font-size: 2rem !important;
-    }
+    /* [1] 제목(h1) 모바일 최적화 */
+    h1 { padding-top: 1rem !important; font-size: 2rem !important; }
     @media (max-width: 640px) {
-        h1 {
-            font-size: 1.5rem !important;
-            margin-top: 0.5rem !important;
-        }
-        .block-container {
-            padding-top: 2rem !important;
-        }
+        h1 { font-size: 1.5rem !important; margin-top: 0.5rem !important; }
+        .block-container { padding-top: 2rem !important; }
     }
 
-    /* [2] 상단 이상한 아이콘 및 사이드바 버튼 숨김 */
+    /* [2] 상단 이상한 아이콘 및 사이드바 숨김 */
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
 
@@ -51,7 +43,7 @@ st.markdown("""
     div[data-testid="stExpander"] summary svg { display: none !important; }
     div[data-testid="stExpander"] summary { padding-left: 10px !important; }
 
-    /* [4] 버튼 스타일: 기본적으로 내용물 크기에 맞게 */
+    /* [4] 버튼 스타일 */
     div.stButton > button {
         width: auto !important;
         padding: 0.4rem 1rem;
@@ -63,13 +55,13 @@ st.markdown("""
         color: white !important;
     }
 
-    /* [5] 폼 내부 버튼은 꽉 차게 (신청/등록 버튼) */
+    /* [5] 폼 내부 버튼은 꽉 차게 */
     div[data-testid="stForm"] div.stButton > button {
         width: 100% !important;
         background: linear-gradient(90deg, #11998e 0%, #38ef7d 100%);
     }
 
-    /* [6] 로그아웃 버튼 전용 스타일 (작고 빨갛게) */
+    /* [6] 로그아웃 버튼 (작고 빨갛게) */
     div[data-testid="column"] button[kind="secondary"] {
         background: #FF4B4B !important;
         color: white !important;
@@ -284,7 +276,7 @@ with main_container.container():
                     if st.form_submit_button("등록"):
                         save_suggestion(COMPANY, title, content, author, private, pw)
                         st.success("✅ 등록되었습니다.")
-                        tm.sleep(1) # [수정] time -> tm
+                        tm.sleep(1)
                         st.session_state['show_sugg_form'] = False; st.rerun()
         
         st.divider()
@@ -305,7 +297,7 @@ with main_container.container():
                             if st.button("🗑️ 삭제", key=f"del_sugg_{idx}"):
                                 delete_row_by_index("건의사항", idx)
                                 st.success("삭제됨")
-                                tm.sleep(1); st.rerun() # [수정] time -> tm
+                                tm.sleep(1); st.rerun()
 
     # 3. 근무표
     with tab3:
@@ -360,10 +352,15 @@ with main_container.container():
                 except: pass
 
         if view_type == "달력":
+            # [수정] 평일 날짜 색상(#333333) 강제 지정 추가
             calendar_css = """
                 .fc { background: white !important; }
+                .fc-daygrid-day-number { color: #333333 !important; text-decoration: none !important; }
+                .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; }
                 .fc-day-sun .fc-daygrid-day-number { color: #FF4B4B !important; }
+                .fc-day-sun .fc-col-header-cell-cushion { color: #FF4B4B !important; }
                 .fc-day-sat .fc-daygrid-day-number { color: #1E90FF !important; }
+                .fc-day-sat .fc-col-header-cell-cushion { color: #1E90FF !important; }
             """
             cal = calendar(events=events, options={"initialView": "dayGridMonth", "height": 750}, key=st.session_state['calendar_key'], custom_css=calendar_css)
             
@@ -403,7 +400,7 @@ with main_container.container():
                     st.write("**📆 일시 및 시간 선택 (단일)**")
                     dc1, dc2, dc3 = st.columns(3)
                     d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
-                    t_start = dc2.time_input("시작 시간", value=time(9,0)) # [정상 작동] datetime.time
+                    t_start = dc2.time_input("시작 시간", value=time(9,0))
                     t_end = dc3.time_input("종료 시간", value=time(18,0))
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
                 else:
@@ -434,7 +431,7 @@ with main_container.container():
                         else:
                             save_attendance(COMPANY, name, type_val, final_date_str, reason, pw, approver)
                             st.success(f"✅ 승인 요청 전송 완료")
-                            tm.sleep(1.5) # [수정] time -> tm
+                            tm.sleep(1.5)
                             st.session_state['show_attend_form']=False; st.rerun()
         st.divider()
         with st.form("search"):
@@ -466,7 +463,7 @@ with main_container.container():
                             if new_pw == chk_pw and new_pw:
                                 user_db[selected_name] = new_pw
                                 save_user_db(user_db)
-                                st.success("설정 완료!"); tm.sleep(1); st.rerun() # [수정]
+                                st.success("설정 완료!"); tm.sleep(1); st.rerun()
                             else: st.error("비밀번호 불일치")
                 else:
                     with st.form("manager_login_form"):
@@ -488,12 +485,11 @@ with main_container.container():
             manager_id = st.session_state['logged_in_manager']
             manager_name = manager_id
             
-            # [수정] 로그아웃 버튼: 작고 심플하게
+            # 로그아웃 버튼: 작고 심플하게
             c_info, c_logout = st.columns([0.8, 0.2])
             with c_info:
                 st.success(f"👋 접속중: {manager_name}")
             with c_logout:
-                # secondary 타입 + CSS 조합으로 작고 빨간 버튼 구현
                 if st.button("로그아웃", type="secondary"):
                     del st.session_state['logged_in_manager']; st.rerun()
             
@@ -507,7 +503,7 @@ with main_container.container():
                         if target != "선택안함":
                             if st.button(f"'{target}' 초기화"):
                                 del user_db[target]; save_user_db(user_db)
-                                st.success("초기화 완료"); tm.sleep(1); st.rerun() # [수정]
+                                st.success("초기화 완료"); tm.sleep(1); st.rerun()
 
             m_tab1, m_tab2, m_tab3 = st.tabs(["✅ 결재", "📢 공지/일정", "📊 통계"])
             with m_tab1:
@@ -537,10 +533,10 @@ with main_container.container():
                                         update_attendance_step("근태신청", i, "최종승인대기", "MASTER")
                                     else: 
                                         update_attendance_step("근태신청", i, "2차승인대기", "반장")
-                                    st.success("승인됨"); tm.sleep(1); st.rerun() # [수정]
+                                    st.success("승인됨"); tm.sleep(1); st.rerun()
                                 if c_rej.button("반려", key=f"rej_{i}"):
                                     update_attendance_step("근태신청", i, "반려")
-                                    st.error("반려됨"); tm.sleep(1); st.rerun() # [수정]
+                                    st.error("반려됨"); tm.sleep(1); st.rerun()
                 else: st.info("데이터 없음")
 
             with m_tab2:
@@ -554,7 +550,7 @@ with main_container.container():
                     if st.form_submit_button("등록"):
                         if type_sel == "공지사항": save_notice(COMPANY, t, c, is_imp)
                         else: save_schedule(COMPANY, str(d_s), t, c, manager_name)
-                        st.success("등록 완료"); tm.sleep(1); st.rerun() # [수정]
+                        st.success("등록 완료"); tm.sleep(1); st.rerun()
             with m_tab3:
                 st.write("### 📊 월별 연차 사용 현황")
                 df = load_data("근태신청", COMPANY)
