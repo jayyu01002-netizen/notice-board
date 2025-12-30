@@ -9,7 +9,7 @@ import holidays
 from streamlit_calendar import calendar
 import json
 import os
-import time as tm # [수정1] time 모듈 이름 충돌 방지 (TypeError 해결)
+import time as tm # [핵심 수정 1] 'time' 모듈 이름 충돌 방지 (이게 캘린더 먹통 주범)
 
 # --- [설정] 페이지 기본 UI 설정 ---
 st.set_page_config(page_title="제이유 사내광장", page_icon="🏢", layout="centered")
@@ -34,7 +34,7 @@ COMPANIES = {
     "0645": "울산 제이유"
 }
 
-# --- [스타일] CSS (모바일 화살표 글씨 제거 + 캘린더 색상) ---
+# --- [스타일] CSS (모바일 글씨 깨짐 강력 제거) ---
 st.markdown("""
 <style>
     /* [1] 모바일 전용 스타일 (스마트폰 화면) */
@@ -46,24 +46,28 @@ st.markdown("""
             padding-right: 0.5rem !important;
         }
         
-        /* [핵심] 깨지는 화살표 텍스트(keyboard_double...) 숨기기 */
+        /* [핵심 수정 2] 깨지는 화살표 텍스트 강제 삭제 (font-size: 0) */
+        button[kind="header"] {
+            font-size: 0px !important; /* 글씨 크기 0으로 만들어서 숨김 */
+            width: 40px !important;
+        }
         [data-testid="stSidebarCollapsedControl"] {
-            color: transparent !important; /* 글씨 투명하게 */
+            font-size: 0px !important; /* 글씨 크기 0으로 만들어서 숨김 */
         }
         
-        /* 대신 햄버거 아이콘(☰) 강제 삽입 */
+        /* 투명해진 버튼 위에 햄버거 아이콘(☰) 강제 삽입 */
         [data-testid="stSidebarCollapsedControl"]::after {
             content: "☰";
-            color: black;
-            font-size: 26px;
+            color: #333333;
+            font-size: 24px !important; /* 아이콘 크기는 키움 */
             font-weight: bold;
             position: absolute;
             left: 0px;
-            top: 0px;
+            top: 5px;
         }
 
         /* 제목 글자 크기 최적화 */
-        h2 { font-size: 1.4rem !important; }
+        h2 { font-size: 1.3rem !important; }
     }
 
     /* [2] 버튼 스타일 */
@@ -168,6 +172,7 @@ def save_suggestion(company, title, content, author, is_private, password):
 def save_attendance(company, name, type_val, date_range_str, reason, password, approver):
     sheet = get_worksheet("근태신청")
     initial_status = "1차승인대기" if approver in FOREMEN else "2차승인대기"
+    # [확인] 승인담당자 컬럼에 저장
     sheet.append_row([company, get_korea_time(), name, type_val, date_range_str, reason, initial_status, str(password), approver])
     st.cache_data.clear()
 
@@ -282,7 +287,7 @@ with main_container.container():
                     private = st.checkbox("🔒 비공개")
                     if st.form_submit_button("등록"):
                         save_suggestion(COMPANY, title, content, author, private, pw)
-                        st.success("✅ 등록되었습니다.")
+                        st.success("✅ 제안 내용이 안전하게 등록되었습니다.")
                         tm.sleep(1.2)
                         st.session_state['show_sugg_form']=False; st.rerun()
         st.divider()
@@ -354,7 +359,7 @@ with main_container.container():
                 except: pass
 
         if view_type == "달력":
-            # [핵심] 평일 글씨 검정색 강제 CSS
+            # [평일 검정 / 주말 색상]
             calendar_css = """
                 .fc { background: white !important; border-radius: 10px; padding: 5px; }
                 .fc-daygrid-day-number, .fc-col-header-cell-cushion { color: #000000 !important; text-decoration: none !important; }
@@ -381,7 +386,7 @@ with main_container.container():
         else:
             st.dataframe(pd.DataFrame(events))
 
-    # 4. 근태신청
+    # 4. 근태신청 (수정: tm 모듈 사용으로 에러 해결)
     with tab4:
         st.write("### 📅 연차/근태 신청")
         if st.button("📝 신청서 작성", on_click=toggle_attend): pass
@@ -393,7 +398,7 @@ with main_container.container():
                     st.write("**📆 일시 및 시간 선택 (단일)**")
                     dc1, dc2, dc3 = st.columns(3)
                     d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
-                    # [수정] time(9,0) 충돌 방지 (기본 함수 사용)
+                    # [수정] time(9,0) -> datetime.time(9,0)이므로 충돌 없음
                     t_start = dc2.time_input("시작 시간", value=time(9,0))
                     t_end = dc3.time_input("종료 시간", value=time(18,0))
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
@@ -495,7 +500,7 @@ with main_container.container():
             m_tab1, m_tab2, m_tab3 = st.tabs(["✅ 결재 관리", "📢 공지/일정", "📊 통계"])
             with m_tab1:
                 df = load_data("근태신청", COMPANY)
-                # [수정] KeyError 방지를 위해 '승인담당자' 컬럼 확인
+                # [수정] KeyError 방지: 컬럼 확인
                 if not df.empty and '상태' in df.columns and '승인담당자' in df.columns:
                     pend = pd.DataFrame()
                     if manager_id == "MASTER":
