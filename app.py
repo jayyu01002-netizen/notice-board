@@ -23,87 +23,76 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 다크모드 강제 해제, 아이콘 복구, 슬라이드 메뉴
+# [스타일] CSS: 다크모드 완벽 차단 & 아이콘 오류 해결 & 슬라이드바
 # =========================================================
 st.markdown("""
 <style>
-    /* [1] 다크모드 완전 차단 (시스템 설정 무시하고 강제 라이트모드) */
-    :root {
-        --primary-color: #ff4b4b;
-        --background-color: #ffffff;
-        --secondary-background-color: #f8f9fa;
-        --text-color: #262730;
-        --font: "sans-serif";
+    /* [1] 다크모드 원천 봉쇄 (흰 배경 + 검정 글씨 강제) */
+    [data-testid="stAppViewContainer"] {
+        background-color: #ffffff !important;
+        color: #333333 !important;
     }
     
-    /* 앱 전체 강제 흰색 배경 */
-    .stApp {
+    /* 텍스트 색상 강제 지정 (다크모드에서 흰글씨 되는 것 방지) */
+    h1, h2, h3, h4, h5, h6, p, li, label, .stMarkdown, .stText {
+        color: #333333 !important;
+        font-family: 'Pretendard', sans-serif !important;
+    }
+
+    /* [2] 입력창(Input) 스타일링 - 다크모드에서도 흰배경/검정글씨 유지 */
+    input, textarea, select {
         background-color: #ffffff !important;
-        color: #262730 !important;
-    }
-
-    /* [2] 폰트 설정 (아이콘 깨짐 방지를 위해 텍스트 태그만 타겟팅) */
-    /* 주의: div나 span에 폰트를 강제하면 아이콘이 깨짐 */
-    h1, h2, h3, h4, h5, h6, p, a, li, button, label, input, textarea {
-        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif !important;
-        color: #262730 !important;
-    }
-
-    /* [3] 입력창(Input) 디자인 (다크모드에서도 흰배경/검정글씨) */
-    /* 브라우저 자동완성 배경색 제거 포함 */
-    input:-webkit-autofill,
-    input:-webkit-autofill:hover, 
-    input:-webkit-autofill:focus, 
-    input:-webkit-autofill:active{
-        -webkit-box-shadow: 0 0 0 30px white inset !important;
-        -webkit-text-fill-color: #000000 !important;
-    }
-
-    .stTextInput input, .stTextArea textarea, .stDateInput input, .stTimeInput input {
-        background-color: #ffffff !important;
-        color: #000000 !important; /* 글씨 검정 */
-        border: 1px solid #d1d5db !important;
-        caret-color: #ff4b4b !important;
+        color: #333333 !important;
+        -webkit-text-fill-color: #333333 !important; /* 사파리/크롬 강제 적용 */
+        caret-color: #ff4b4b !important; /* 커서 색상 */
+        border: 1px solid #e5e7eb !important;
     }
     
-    /* 드롭다운(Selectbox) 디자인 */
+    /* Streamlit 입력 위젯 래퍼들 */
+    .stTextInput > div > div, .stTextArea > div > div, .stDateInput > div > div, .stTimeInput > div > div {
+        background-color: #ffffff !important;
+        border-radius: 8px !important;
+        color: #333333 !important;
+    }
+
+    /* [3] 드롭다운(Selectbox) 완벽 해결 */
+    /* 선택된 값 표시 영역 */
     .stSelectbox div[data-baseweb="select"] > div {
         background-color: #ffffff !important;
-        color: #000000 !important;
-        border-color: #d1d5db !important;
+        color: #333333 !important;
+        border-color: #e5e7eb !important;
     }
     /* 드롭다운 텍스트 */
-    .stSelectbox span {
-        color: #000000 !important;
+    .stSelectbox div[data-baseweb="select"] span {
+        color: #333333 !important;
     }
-    /* 드롭다운 팝업 메뉴 */
-    div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-testid="stSelectboxVirtualDropdown"] {
+    /* 드롭다운 눌렀을 때 나오는 리스트 창 */
+    div[data-baseweb="popover"], div[data-baseweb="menu"], ul {
         background-color: #ffffff !important;
-        border: 1px solid #d1d5db !important;
     }
-    /* 메뉴 아이템 */
+    /* 리스트 내부 아이템 */
     div[data-baseweb="popover"] li, div[data-baseweb="menu"] div {
+        color: #333333 !important;
         background-color: #ffffff !important;
-        color: #000000 !important;
     }
-    /* 메뉴 마우스 오버 */
+    /* 리스트 아이템 호버(마우스 올렸을 때) */
     div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] div:hover {
-        background-color: #f3f4f6 !important;
+        background-color: #f3f4f6 !important; /* 연한 회색 */
     }
 
-    /* [4] 모바일 최적화 (상단 여백) */
+    /* [4] 모바일 상단 여백 (제목 잘림 방지) */
     h1 { padding-top: 1rem !important; }
     @media (max-width: 640px) {
-        h1 { margin-top: 3rem !important; font-size: 1.6rem !important; }
+        h1 { margin-top: 3rem !important; font-size: 1.5rem !important; }
         .block-container { padding-top: 6rem !important; } 
     }
 
-    /* [5] 상단바 제거 */
+    /* [5] 상단 불필요 요소 숨김 */
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
     
     /* ================================================================
-       [6] ★ 슬라이드 탭 메뉴 (동그라미 제거, 스크롤바 제거) ★ 
+       [6] ★ 슬라이드 탭 메뉴 (터치 스크롤) ★ 
        ================================================================
     */
     [data-testid="stRadio"] > div {
@@ -112,26 +101,17 @@ st.markdown("""
         flex-wrap: nowrap;
         overflow-x: auto;
         gap: 0px;
-        background-color: #ffffff !important;
-        border-bottom: 1px solid #e5e7eb;
+        background: white !important;
+        border-bottom: 2px solid #f3f4f6;
         padding-bottom: 0px !important;
         margin-bottom: 15px;
-        -webkit-overflow-scrolling: touch; /* 부드러운 스크롤 */
-        
-        /* 스크롤바 숨기기 (모든 브라우저) */
-        -ms-overflow-style: none;  /* IE and Edge */
-        scrollbar-width: none;  /* Firefox */
+        -webkit-overflow-scrolling: touch;
+        -ms-overflow-style: none; /* IE, Edge 스크롤바 숨김 */
+        scrollbar-width: none;    /* Firefox 스크롤바 숨김 */
     }
-    [data-testid="stRadio"] > div::-webkit-scrollbar {
-        display: none; /* Chrome, Safari, Opera */
-    }
+    [data-testid="stRadio"] > div::-webkit-scrollbar { display: none; } /* 크롬 스크롤바 숨김 */
 
-    /* 라디오 버튼(동그라미) 숨김 - 가장 중요한 부분 */
-    [data-testid="stRadio"] label > div:first-child {
-        display: none !important;
-    }
-
-    /* 탭 버튼 스타일 */
+    /* 탭 라벨 */
     [data-testid="stRadio"] label {
         background-color: transparent !important;
         border: none !important;
@@ -139,79 +119,71 @@ st.markdown("""
         margin: 0 !important;
         padding: 12px 16px !important;
         cursor: pointer;
-        transition: color 0.2s, border-bottom 0.2s;
+        transition: all 0.2s ease;
         min-width: fit-content;
         border-bottom: 3px solid transparent !important;
     }
+    [data-testid="stRadio"] label > div:first-child { display: none !important; }
     
-    /* 기본 텍스트 (회색) */
+    /* 탭 텍스트 */
     [data-testid="stRadio"] label p {
-        color: #9ca3af !important; 
+        color: #9ca3af !important; /* 회색 */
         font-weight: 600 !important;
         font-size: 16px !important;
-        margin: 0 !important;
     }
     
-    /* 선택된 탭 (:has 선택자 - 최신 브라우저 지원) */
+    /* 선택된 탭 */
     [data-testid="stRadio"] label:has(input:checked) {
-        border-bottom: 3px solid #ff4b4b !important;
+        border-bottom: 3px solid #ef4444 !important; /* 빨간 밑줄 */
     }
     [data-testid="stRadio"] label:has(input:checked) p {
-        color: #ff4b4b !important;
+        color: #ef4444 !important; /* 빨간 글씨 */
         font-weight: 800 !important;
     }
 
-    /* [7] 버튼 (등록, 로그인 등) */
+    /* [7] 버튼 디자인 */
     div.stButton > button {
-        width: 100% !important;
+        width: 100% !important;        
+        border-radius: 8px !important;
+        font-weight: 600 !important;
         border: 1px solid #e5e7eb !important;
         background-color: #f9fafb !important;
         color: #333333 !important;
-        border-radius: 8px !important;
         padding: 0.6rem !important;
-        font-weight: 600 !important;
+        box-shadow: none !important;
     }
-    
-    /* 폼 안의 제출 버튼 (빨강) */
-    div[data-testid="stForm"] div.stButton > button,
+    /* 강조 버튼 (등록, 삭제) */
+    div[data-testid="stForm"] div.stButton > button, 
     div[data-testid="column"] button[kind="secondary"] {
-        background-color: #ff4b4b !important;
-        color: #ffffff !important;
+        background: #ef4444 !important; 
+        color: white !important;
         border: none !important;
     }
 
-    /* [8] Expander 스타일 (아이콘 깨짐 방지) */
+    /* [8] Expander (화살표 텍스트 깨짐 해결) */
+    /* 폰트를 모든 div에 적용하지 않고 필요한 곳에만 적용하여 아이콘 보호 */
     .streamlit-expanderHeader {
         background-color: #ffffff !important;
-        color: #333333 !important;
-        border: 1px solid #e5e7eb !important;
+        border: 1px solid #f3f4f6 !important;
         border-radius: 8px !important;
+        color: #333333 !important;
     }
-    /* 아이콘(svg) 색상 강제 */
+    /* 제목 텍스트만 폰트 적용 */
+    .streamlit-expanderHeader p {
+        font-family: 'Pretendard', sans-serif !important;
+        font-size: 15px !important;
+        font-weight: 600 !important;
+    }
+    /* 아이콘 색상 보정 */
     .streamlit-expanderHeader svg {
         fill: #333333 !important;
         stroke: #333333 !important;
     }
-    .streamlit-expanderHeader p {
-        font-size: 15px !important;
-        font-weight: 600 !important;
-    }
 
-    /* [9] 달력 스타일 (요일 색상) */
+    /* [9] 달력 스타일 */
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
-    .fc-toolbar-title { color: #333333 !important; font-weight: bold !important; }
-    .fc-button { color: #333333 !important; border: 1px solid #e5e7eb !important; background-color: white !important; }
-    
-    .fc-daygrid-day-number { color: #333333 !important; text-decoration: none !important; }
-    .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; font-weight: bold !important; }
-    
-    /* 일요일 (빨강) */
-    .fc-day-sun .fc-daygrid-day-number, 
-    .fc-day-sun .fc-col-header-cell-cushion { color: #ef4444 !important; }
-    
-    /* 토요일 (파랑) */
-    .fc-day-sat .fc-daygrid-day-number, 
-    .fc-day-sat .fc-col-header-cell-cushion { color: #3b82f6 !important; }
+    .fc-toolbar-title { color: #333333 !important; }
+    .fc-button { color: #333333 !important; border: 1px solid #e5e7eb !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -538,6 +510,7 @@ with main_container.container():
                 except: pass
 
         if view_type == "달력":
+            # [핵심] 달력 CSS: 기본 검정 글씨 + 토요일(파랑) + 일요일(빨강)
             calendar_css = """
                 .fc { background: white !important; }
                 .fc-toolbar-title { color: #333333 !important; font-weight: bold !important; font-size: 1.5rem !important; }
