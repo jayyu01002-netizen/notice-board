@@ -23,33 +23,78 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 디자인 유지 + 달력 요일 색상 복구
+# [스타일] CSS: 다크모드 완벽 차단 & 아이콘 오류 해결 & 슬라이드바
 # =========================================================
 st.markdown("""
 <style>
-    /* [1] 전체 배경 및 기본 텍스트 설정 */
-    .stApp {
+    /* [1] 다크모드 원천 봉쇄 (흰 배경 + 검정 글씨 강제) */
+    [data-testid="stAppViewContainer"] {
         background-color: #ffffff !important;
         color: #333333 !important;
     }
     
-    h1, h2, h3, h4, h5, h6, p, li, label, button, input, textarea {
-        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    /* 텍스트 색상 강제 지정 (다크모드에서 흰글씨 되는 것 방지) */
+    h1, h2, h3, h4, h5, h6, p, li, label, .stMarkdown, .stText {
+        color: #333333 !important;
+        font-family: 'Pretendard', sans-serif !important;
+    }
+
+    /* [2] 입력창(Input) 스타일링 - 다크모드에서도 흰배경/검정글씨 유지 */
+    input, textarea, select {
+        background-color: #ffffff !important;
+        color: #333333 !important;
+        -webkit-text-fill-color: #333333 !important; /* 사파리/크롬 강제 적용 */
+        caret-color: #ff4b4b !important; /* 커서 색상 */
+        border: 1px solid #e5e7eb !important;
+    }
+    
+    /* Streamlit 입력 위젯 래퍼들 */
+    .stTextInput > div > div, .stTextArea > div > div, .stDateInput > div > div, .stTimeInput > div > div {
+        background-color: #ffffff !important;
+        border-radius: 8px !important;
         color: #333333 !important;
     }
 
-    /* [2] 모바일 상단 여백 확보 */
+    /* [3] 드롭다운(Selectbox) 완벽 해결 */
+    /* 선택된 값 표시 영역 */
+    .stSelectbox div[data-baseweb="select"] > div {
+        background-color: #ffffff !important;
+        color: #333333 !important;
+        border-color: #e5e7eb !important;
+    }
+    /* 드롭다운 텍스트 */
+    .stSelectbox div[data-baseweb="select"] span {
+        color: #333333 !important;
+    }
+    /* 드롭다운 눌렀을 때 나오는 리스트 창 */
+    div[data-baseweb="popover"], div[data-baseweb="menu"], ul {
+        background-color: #ffffff !important;
+    }
+    /* 리스트 내부 아이템 */
+    div[data-baseweb="popover"] li, div[data-baseweb="menu"] div {
+        color: #333333 !important;
+        background-color: #ffffff !important;
+    }
+    /* 리스트 아이템 호버(마우스 올렸을 때) */
+    div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] div:hover {
+        background-color: #f3f4f6 !important; /* 연한 회색 */
+    }
+
+    /* [4] 모바일 상단 여백 (제목 잘림 방지) */
     h1 { padding-top: 1rem !important; }
     @media (max-width: 640px) {
         h1 { margin-top: 3rem !important; font-size: 1.5rem !important; }
         .block-container { padding-top: 6rem !important; } 
     }
 
-    /* [3] 상단 불필요 요소 숨김 */
+    /* [5] 상단 불필요 요소 숨김 */
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
     
-    /* [4] 슬라이드 탭 메뉴 */
+    /* ================================================================
+       [6] ★ 슬라이드 탭 메뉴 (터치 스크롤) ★ 
+       ================================================================
+    */
     [data-testid="stRadio"] > div {
         display: flex;
         flex-direction: row;
@@ -57,72 +102,57 @@ st.markdown("""
         overflow-x: auto;
         gap: 0px;
         background: white !important;
-        border-bottom: 2px solid #f0f0f0;
+        border-bottom: 2px solid #f3f4f6;
         padding-bottom: 0px !important;
         margin-bottom: 15px;
         -webkit-overflow-scrolling: touch;
-        -ms-overflow-style: none;
-        scrollbar-width: none;
+        -ms-overflow-style: none; /* IE, Edge 스크롤바 숨김 */
+        scrollbar-width: none;    /* Firefox 스크롤바 숨김 */
     }
-    [data-testid="stRadio"] > div::-webkit-scrollbar { display: none; }
+    [data-testid="stRadio"] > div::-webkit-scrollbar { display: none; } /* 크롬 스크롤바 숨김 */
 
+    /* 탭 라벨 */
     [data-testid="stRadio"] label {
         background-color: transparent !important;
         border: none !important;
         box-shadow: none !important;
         margin: 0 !important;
-        padding: 10px 16px !important;
+        padding: 12px 16px !important;
         cursor: pointer;
         transition: all 0.2s ease;
         min-width: fit-content;
         border-bottom: 3px solid transparent !important;
     }
-    
     [data-testid="stRadio"] label > div:first-child { display: none !important; }
     
+    /* 탭 텍스트 */
     [data-testid="stRadio"] label p {
-        color: #999999 !important; 
+        color: #9ca3af !important; /* 회색 */
         font-weight: 600 !important;
         font-size: 16px !important;
     }
     
+    /* 선택된 탭 */
     [data-testid="stRadio"] label:has(input:checked) {
-        border-bottom: 3px solid #ef4444 !important; 
+        border-bottom: 3px solid #ef4444 !important; /* 빨간 밑줄 */
     }
     [data-testid="stRadio"] label:has(input:checked) p {
-        color: #ef4444 !important; 
+        color: #ef4444 !important; /* 빨간 글씨 */
         font-weight: 800 !important;
     }
 
-    /* [5] 입력창 및 버튼 디자인 */
-    .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] {
-        background-color: #ffffff !important;
-        color: #333333 !important;
-        border: 1px solid #e0e0e0 !important;
-        border-radius: 8px !important;
-    }
-    div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-testid="stSelectboxVirtualDropdown"] {
-        background-color: #ffffff !important;
-        border: 1px solid #e0e0e0 !important;
-    }
-    div[data-baseweb="popover"] li, div[data-baseweb="menu"] div {
-        color: #333333 !important;
-        background-color: #ffffff !important;
-    }
-    div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] div:hover {
-        background-color: #f0f0f0 !important;
-    }
-
+    /* [7] 버튼 디자인 */
     div.stButton > button {
         width: 100% !important;        
         border-radius: 8px !important;
         font-weight: 600 !important;
         border: 1px solid #e5e7eb !important;
-        background-color: #f9f9f9 !important;
+        background-color: #f9fafb !important;
         color: #333333 !important;
         padding: 0.6rem !important;
         box-shadow: none !important;
     }
+    /* 강조 버튼 (등록, 삭제) */
     div[data-testid="stForm"] div.stButton > button, 
     div[data-testid="column"] button[kind="secondary"] {
         background: #ef4444 !important; 
@@ -130,27 +160,30 @@ st.markdown("""
         border: none !important;
     }
 
-    /* [6] Expander 헤더 */
+    /* [8] Expander (화살표 텍스트 깨짐 해결) */
+    /* 폰트를 모든 div에 적용하지 않고 필요한 곳에만 적용하여 아이콘 보호 */
     .streamlit-expanderHeader {
-        background-color: white !important;
-        color: #333333 !important;
-        border: 1px solid #f0f0f0 !important;
+        background-color: #ffffff !important;
+        border: 1px solid #f3f4f6 !important;
         border-radius: 8px !important;
+        color: #333333 !important;
     }
+    /* 제목 텍스트만 폰트 적용 */
     .streamlit-expanderHeader p {
+        font-family: 'Pretendard', sans-serif !important;
         font-size: 15px !important;
         font-weight: 600 !important;
-        color: #333333 !important;
     }
+    /* 아이콘 색상 보정 */
     .streamlit-expanderHeader svg {
         fill: #333333 !important;
         stroke: #333333 !important;
     }
 
-    /* [7] 달력 기본 스타일 */
+    /* [9] 달력 스타일 */
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
-    .fc-toolbar-title { color: #1f2937 !important; }
-    .fc-button { color: #374151 !important; border: 1px solid #e5e7eb !important; }
+    .fc-toolbar-title { color: #333333 !important; }
+    .fc-button { color: #333333 !important; border: 1px solid #e5e7eb !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -528,7 +561,7 @@ with main_container.container():
         
         if st.session_state['show_attend_form']:
             with st.container(border=True):
-                date_mode = st.radio("기간 설정", ["반차/외출/병가 (단일)", "연차/휴가(기간)"], horizontal=True)
+                date_mode = st.radio("기간 설정", ["반차/외출/병가 (단일)", "연차/휴가 (기간)"], horizontal=True)
                 final_date_str = ""
                 if date_mode == "반차/외출/병가 (단일)":
                     st.write("**📆 일시 및 시간 선택 (단일)**")
