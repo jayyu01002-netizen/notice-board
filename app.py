@@ -23,64 +23,66 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 다크모드 완벽 차단 & 아이콘 오류 해결 & 슬라이드바
+# [스타일] CSS: 다크모드 강제 해제 & 아이콘 깨짐 방지
 # =========================================================
 st.markdown("""
 <style>
-    /* [1] 다크모드 원천 봉쇄 (흰 배경 + 검정 글씨 강제) */
+    /* [1] 시스템 다크모드 변수 원천 차단 (White Mode 강제) */
+    :root {
+        --primary-color: #ef4444;
+        --background-color: #ffffff;
+        --secondary-background-color: #f9fafb;
+        --text-color: #333333;
+        --font: "sans-serif";
+    }
+
+    /* 전체 앱 배경 및 글씨색 강제 고정 */
+    .stApp {
+        background-color: #ffffff !important;
+        color: #333333 !important;
+    }
+    
     [data-testid="stAppViewContainer"] {
         background-color: #ffffff !important;
-        color: #333333 !important;
     }
     
-    /* 텍스트 색상 강제 지정 (다크모드에서 흰글씨 되는 것 방지) */
-    h1, h2, h3, h4, h5, h6, p, li, label, .stMarkdown, .stText {
-        color: #333333 !important;
+    [data-testid="stHeader"] {
+        background-color: #ffffff !important;
+    }
+
+    /* [2] 폰트 적용 (아이콘 깨짐 방지 - 텍스트 태그에만 한정 적용) */
+    h1, h2, h3, h4, h5, h6, p, span, li, button, input, textarea, label {
         font-family: 'Pretendard', sans-serif !important;
-    }
-
-    /* [2] 입력창(Input) 스타일링 - 다크모드에서도 흰배경/검정글씨 유지 */
-    input, textarea, select {
-        background-color: #ffffff !important;
         color: #333333 !important;
-        -webkit-text-fill-color: #333333 !important; /* 사파리/크롬 강제 적용 */
-        caret-color: #ff4b4b !important; /* 커서 색상 */
-        border: 1px solid #e5e7eb !important;
     }
     
-    /* Streamlit 입력 위젯 래퍼들 */
-    .stTextInput > div > div, .stTextArea > div > div, .stDateInput > div > div, .stTimeInput > div > div {
+    /* ★ 중요: 아이콘이 들어가는 클래스는 폰트 강제 해제 ★ */
+    .material-icons, .icon, svg, [data-testid="stExpander"] svg {
+        font-family: 'Material Icons', sans-serif !important; /* 아이콘 폰트 유지 */
+    }
+
+    /* [3] 다크모드에서 안 보이는 입력창/드롭다운 강제 화이트 */
+    .stTextInput input, .stTextArea textarea, .stSelectbox div[data-baseweb="select"] > div, .stDateInput input, .stTimeInput input {
         background-color: #ffffff !important;
+        color: #333333 !important;
+        border: 1px solid #d1d5db !important;
         border-radius: 8px !important;
-        color: #333333 !important;
     }
-
-    /* [3] 드롭다운(Selectbox) 완벽 해결 */
-    /* 선택된 값 표시 영역 */
-    .stSelectbox div[data-baseweb="select"] > div {
+    
+    /* 드롭다운 팝업 메뉴 (다크모드 배경 검정 방지) */
+    div[data-baseweb="popover"], div[data-baseweb="menu"], ul[data-testid="stSelectboxVirtualDropdown"] {
         background-color: #ffffff !important;
-        color: #333333 !important;
-        border-color: #e5e7eb !important;
+        border: 1px solid #d1d5db !important;
     }
-    /* 드롭다운 텍스트 */
-    .stSelectbox div[data-baseweb="select"] span {
-        color: #333333 !important;
-    }
-    /* 드롭다운 눌렀을 때 나오는 리스트 창 */
-    div[data-baseweb="popover"], div[data-baseweb="menu"], ul {
-        background-color: #ffffff !important;
-    }
-    /* 리스트 내부 아이템 */
     div[data-baseweb="popover"] li, div[data-baseweb="menu"] div {
-        color: #333333 !important;
         background-color: #ffffff !important;
+        color: #333333 !important;
     }
-    /* 리스트 아이템 호버(마우스 올렸을 때) */
     div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] div:hover {
-        background-color: #f3f4f6 !important; /* 연한 회색 */
+        background-color: #f3f4f6 !important; /* 마우스 오버 시 연한 회색 */
     }
 
-    /* [4] 모바일 상단 여백 (제목 잘림 방지) */
+    /* [4] 모바일 상단 여백 확보 */
     h1 { padding-top: 1rem !important; }
     @media (max-width: 640px) {
         h1 { margin-top: 3rem !important; font-size: 1.5rem !important; }
@@ -92,7 +94,7 @@ st.markdown("""
     section[data-testid="stSidebar"] { display: none !important; }
     
     /* ================================================================
-       [6] ★ 슬라이드 탭 메뉴 (터치 스크롤) ★ 
+       [6] ★ 앱 스타일 슬라이드 탭 (터치 스크롤 + 디자인) ★ 
        ================================================================
     */
     [data-testid="stRadio"] > div {
@@ -102,16 +104,16 @@ st.markdown("""
         overflow-x: auto;
         gap: 0px;
         background: white !important;
-        border-bottom: 2px solid #f3f4f6;
+        border-bottom: 2px solid #f0f0f0;
         padding-bottom: 0px !important;
         margin-bottom: 15px;
-        -webkit-overflow-scrolling: touch;
-        -ms-overflow-style: none; /* IE, Edge 스크롤바 숨김 */
-        scrollbar-width: none;    /* Firefox 스크롤바 숨김 */
+        -webkit-overflow-scrolling: touch; /* 모바일 부드러운 스크롤 */
+        -ms-overflow-style: none; 
+        scrollbar-width: none;
     }
-    [data-testid="stRadio"] > div::-webkit-scrollbar { display: none; } /* 크롬 스크롤바 숨김 */
+    [data-testid="stRadio"] > div::-webkit-scrollbar { display: none; }
 
-    /* 탭 라벨 */
+    /* 탭 버튼 스타일 */
     [data-testid="stRadio"] label {
         background-color: transparent !important;
         border: none !important;
@@ -123,21 +125,21 @@ st.markdown("""
         min-width: fit-content;
         border-bottom: 3px solid transparent !important;
     }
+    
     [data-testid="stRadio"] label > div:first-child { display: none !important; }
     
-    /* 탭 텍스트 */
     [data-testid="stRadio"] label p {
-        color: #9ca3af !important; /* 회색 */
+        color: #9ca3af !important; 
         font-weight: 600 !important;
         font-size: 16px !important;
     }
     
-    /* 선택된 탭 */
+    /* 선택된 탭 스타일 */
     [data-testid="stRadio"] label:has(input:checked) {
-        border-bottom: 3px solid #ef4444 !important; /* 빨간 밑줄 */
+        border-bottom: 3px solid #ef4444 !important; 
     }
     [data-testid="stRadio"] label:has(input:checked) p {
-        color: #ef4444 !important; /* 빨간 글씨 */
+        color: #ef4444 !important; 
         font-weight: 800 !important;
     }
 
@@ -152,7 +154,7 @@ st.markdown("""
         padding: 0.6rem !important;
         box-shadow: none !important;
     }
-    /* 강조 버튼 (등록, 삭제) */
+    /* 중요 버튼 (빨강) */
     div[data-testid="stForm"] div.stButton > button, 
     div[data-testid="column"] button[kind="secondary"] {
         background: #ef4444 !important; 
@@ -160,30 +162,34 @@ st.markdown("""
         border: none !important;
     }
 
-    /* [8] Expander (화살표 텍스트 깨짐 해결) */
-    /* 폰트를 모든 div에 적용하지 않고 필요한 곳에만 적용하여 아이콘 보호 */
+    /* [8] Expander 스타일 (아이콘 깨짐 방지 및 가독성) */
     .streamlit-expanderHeader {
         background-color: #ffffff !important;
-        border: 1px solid #f3f4f6 !important;
+        border: 1px solid #e5e7eb !important;
         border-radius: 8px !important;
         color: #333333 !important;
     }
-    /* 제목 텍스트만 폰트 적용 */
+    /* Expander 내부 제목만 폰트 적용 */
     .streamlit-expanderHeader p {
-        font-family: 'Pretendard', sans-serif !important;
         font-size: 15px !important;
         font-weight: 600 !important;
     }
-    /* 아이콘 색상 보정 */
-    .streamlit-expanderHeader svg {
-        fill: #333333 !important;
-        stroke: #333333 !important;
-    }
 
-    /* [9] 달력 스타일 */
+    /* [9] 달력 스타일 (글씨 검정/빨강/파랑 명확화) */
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
     .fc-toolbar-title { color: #333333 !important; }
-    .fc-button { color: #333333 !important; border: 1px solid #e5e7eb !important; }
+    .fc-button { color: #333333 !important; border: 1px solid #e5e7eb !important; background-color: #fff !important; }
+    
+    .fc-daygrid-day-number { color: #333333 !important; text-decoration: none !important; }
+    .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; font-weight: bold !important; }
+    
+    /* 일요일 (빨강) */
+    .fc-day-sun .fc-daygrid-day-number, 
+    .fc-day-sun .fc-col-header-cell-cushion { color: #EF4444 !important; }
+    
+    /* 토요일 (파랑) */
+    .fc-day-sat .fc-daygrid-day-number, 
+    .fc-day-sat .fc-col-header-cell-cushion { color: #3B82F6 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -510,7 +516,6 @@ with main_container.container():
                 except: pass
 
         if view_type == "달력":
-            # [핵심] 달력 CSS: 기본 검정 글씨 + 토요일(파랑) + 일요일(빨강)
             calendar_css = """
                 .fc { background: white !important; }
                 .fc-toolbar-title { color: #333333 !important; font-weight: bold !important; font-size: 1.5rem !important; }
