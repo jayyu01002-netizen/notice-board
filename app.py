@@ -922,7 +922,7 @@ with main_container.container():
                                     pivot.to_excel(writer, sheet_name='월별통계')
                                     
                                 st.download_button(
-                                    label="📥 엑셀 다운로드 (오류 수정됨)",
+                                    label="📥 엑셀 다운로드",
                                     data=buffer,
                                     file_name=f"월별연차사용현황_{get_today()}.xlsx",
                                     mime="application/vnd.ms-excel"
