@@ -2,6 +2,7 @@ streamlit
 pandas
 gspread
 oauth2client
-streamlit-calendar
 pytz
 holidays
+streamlit-calendar
+XlsxWriter
