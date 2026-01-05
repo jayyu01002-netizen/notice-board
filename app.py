@@ -8,6 +8,7 @@ import pytz
 import holidays
 from streamlit_calendar import calendar
 import time as tm
+import io  # [추가] 엑셀 변환을 위한 입출력 라이브러리
 
 # =========================================================
 # [설정] 페이지 기본 설정
@@ -272,7 +273,6 @@ def save_suggestion(company, title, content, author, is_private, password):
     sheet.append_row([company, get_today(), title, content, author, "TRUE" if is_private else "FALSE", str(password)])
     st.cache_data.clear()
 
-# [수정됨] MASTER 선택 시 승인 로직 변경
 def save_attendance(company, name, type_val, date_range_str, reason, password, approver):
     sheet = get_worksheet("근태신청")
     
@@ -281,13 +281,13 @@ def save_attendance(company, name, type_val, date_range_str, reason, password, a
 
     if company == "장안 제이유":
         if approver == "MASTER":
-            initial_status = "최종승인대기" # MASTER 선택 시 바로 최종 승인 대기
+            initial_status = "최종승인대기" 
         elif approver in JANGAN_FOREMEN:
             initial_status = "1차승인대기"
         else:
             initial_status = "2차승인대기"
     else:
-        # 울산 등 기타 (울산은 원래 승인대기 상태에서 MASTER가 처리)
+        # 울산 등 기타
         initial_status = "승인대기" 
         
     sheet.append_row([company, get_today(), name, type_val, date_range_str, reason, initial_status, str(password), approver])
@@ -634,7 +634,6 @@ with main_container.container():
                     pw = c2.text_input("비밀번호(본인확인용)", type="password")
                     type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근"])
                     
-                    # [수정됨] 승인 요청 대상에 MASTER 추가 (장안/울산 모두)
                     if COMPANY == "장안 제이유":
                         approver_options = JANGAN_FOREMEN + JANGAN_MID + ["MASTER"]
                     else:
@@ -669,7 +668,6 @@ with main_container.container():
         if 'logged_in_manager' not in st.session_state:
             user_db = load_user_db()
             
-            # [수정됨] 관리자 선택 목록에서 MASTER 제거 (혼동 방지)
             if COMPANY == "장안 제이유":
                 manager_options = ["선택안함"] + JANGAN_FOREMEN + JANGAN_MID 
             else:
@@ -749,7 +747,6 @@ with main_container.container():
                             pend = df[df['상태'] == '승인대기']
                             st.info("📢 전체 승인 대기 (Master 권한)")
                         elif manager_id in ULSAN_APPROVERS:
-                            # [핵심] 공백 제거를 통한 안전한 매칭
                             pend = df[(df['상태'] == '승인대기') & (df['승인담당자'].str.strip() == manager_name.strip())]
                             st.info(f"📢 {manager_name}님 승인 대기")
 
@@ -873,6 +870,18 @@ with main_container.container():
                             if not stat_df.empty:
                                 pivot = stat_df.pivot_table(index="이름", columns="월", values="사용일수", aggfunc="sum", fill_value=0)
                                 st.dataframe(pivot, use_container_width=True)
+                                
+                                # [추가된 기능] 엑셀 다운로드
+                                buffer = io.BytesIO()
+                                with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+                                    pivot.to_excel(writer, sheet_name='월별통계')
+                                    
+                                st.download_button(
+                                    label="📥 엑셀 다운로드",
+                                    data=buffer,
+                                    file_name=f"월별연차사용현황_{get_today()}.xlsx",
+                                    mime="application/vnd.ms-excel"
+                                )
                             else:
                                 st.info("집계할 데이터가 부족합니다.")
                         except Exception as e:
