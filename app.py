@@ -192,7 +192,7 @@ st.markdown("""
 # =========================================================
 JANGAN_FOREMEN = ["JK 조장", "JX 메인 조장", "JX 어퍼 조장", "MX5 조장", "피더 조장"]
 JANGAN_MID = ["반장"]
-ULSAN_APPROVERS = ["김범진", "남수영", "홍성곤", "MASTER"]
+ULSAN_APPROVERS = ["김범진", "남수영", "홍성곤", "MASTER(울산)"]
 ALL_MANAGERS = JANGAN_FOREMEN + JANGAN_MID + ULSAN_APPROVERS + ["MASTER"]
 
 COMPANIES = {
