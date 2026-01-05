@@ -192,7 +192,7 @@ st.markdown("""
 # =========================================================
 JANGAN_FOREMEN = ["JK 조장", "JX 메인 조장", "JX 어퍼 조장", "MX5 조장", "피더 조장"]
 JANGAN_MID = ["반장"]
-ULSAN_APPROVERS = ["김범진", "남수영", "홍성곤", "MASTER(울산)"]
+ULSAN_APPROVERS = ["김범진", "남수영", "홍성곤"]
 ALL_MANAGERS = JANGAN_FOREMEN + JANGAN_MID + ULSAN_APPROVERS + ["MASTER"]
 
 COMPANIES = {
@@ -272,12 +272,24 @@ def save_suggestion(company, title, content, author, is_private, password):
     sheet.append_row([company, get_today(), title, content, author, "TRUE" if is_private else "FALSE", str(password)])
     st.cache_data.clear()
 
+# [수정됨] MASTER 선택 시 승인 로직 변경
 def save_attendance(company, name, type_val, date_range_str, reason, password, approver):
     sheet = get_worksheet("근태신청")
+    
+    # 기본값 설정
+    initial_status = "승인대기"
+
     if company == "장안 제이유":
-        initial_status = "1차승인대기" if approver in JANGAN_FOREMEN else "2차승인대기"
+        if approver == "MASTER":
+            initial_status = "최종승인대기" # MASTER 선택 시 바로 최종 승인 대기
+        elif approver in JANGAN_FOREMEN:
+            initial_status = "1차승인대기"
+        else:
+            initial_status = "2차승인대기"
     else:
+        # 울산 등 기타 (울산은 원래 승인대기 상태에서 MASTER가 처리)
         initial_status = "승인대기" 
+        
     sheet.append_row([company, get_today(), name, type_val, date_range_str, reason, initial_status, str(password), approver])
     st.cache_data.clear()
 
@@ -302,7 +314,7 @@ def update_data_cell(sheet_name, row_idx, col_idx, new_value):
     sheet.update_cell(row_idx + 2, col_idx, new_value)
     st.cache_data.clear()
 
-# [수정됨] 통계 집계 오류 수정 (단일 연차 파싱 강화)
+# 통계 집계 함수
 def calculate_leave_usage(date_str, leave_type):
     usage = {}
     
@@ -329,14 +341,11 @@ def calculate_leave_usage(date_str, leave_type):
             s_date = datetime.strptime(start_part[:10], "%Y-%m-%d").date()
             
             # 종료일 파싱 로직 개선
-            # 종료일 부분이 날짜 형식(YYYY-MM-DD)을 포함하고 있는지 확인
             if len(end_part) >= 10 and end_part[4] == '-':
                  e_date = datetime.strptime(end_part[:10], "%Y-%m-%d").date()
             else:
-                # 날짜 형식이 없으면(예: "17:00") 시작일과 동일한 날짜로 간주 (1일 휴가)
                 e_date = s_date
         else:
-            # "~"가 없는 경우
             s_date = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
             e_date = s_date
 
@@ -625,10 +634,11 @@ with main_container.container():
                     pw = c2.text_input("비밀번호(본인확인용)", type="password")
                     type_val = st.selectbox("구분", ["연차", "반차(오전)", "반차(오후)", "조퇴", "외출", "결근"])
                     
+                    # [수정됨] 승인 요청 대상에 MASTER 추가 (장안/울산 모두)
                     if COMPANY == "장안 제이유":
-                        approver_options = JANGAN_FOREMEN + JANGAN_MID
+                        approver_options = JANGAN_FOREMEN + JANGAN_MID + ["MASTER"]
                     else:
-                        approver_options = ULSAN_APPROVERS
+                        approver_options = ULSAN_APPROVERS + ["MASTER"]
                     
                     approver = st.selectbox("승인 요청 대상", approver_options)
                     reason = st.text_input("사유")
@@ -659,10 +669,11 @@ with main_container.container():
         if 'logged_in_manager' not in st.session_state:
             user_db = load_user_db()
             
+            # [수정됨] 관리자 선택 목록에서 MASTER 제거 (혼동 방지)
             if COMPANY == "장안 제이유":
-                manager_options = ["선택안함"] + JANGAN_FOREMEN + JANGAN_MID + ["MASTER"]
+                manager_options = ["선택안함"] + JANGAN_FOREMEN + JANGAN_MID 
             else:
-                manager_options = ["선택안함"] + ULSAN_APPROVERS + ["MASTER"]
+                manager_options = ["선택안함"] + ULSAN_APPROVERS 
 
             selected_name = st.selectbox("관리자 선택", manager_options)
             
