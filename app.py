@@ -302,24 +302,56 @@ def update_data_cell(sheet_name, row_idx, col_idx, new_value):
     sheet.update_cell(row_idx + 2, col_idx, new_value)
     st.cache_data.clear()
 
+# [수정됨] 통계 집계 오류 수정 (단일 연차 파싱 강화)
 def calculate_leave_usage(date_str, leave_type):
     usage = {}
+    
+    # 1. 반차 처리 (0.5일)
     if "반차" in leave_type:
-        try: usage[date_str[:7]] = 0.5
+        try:
+            d_str = date_str[:10]
+            datetime.strptime(d_str, "%Y-%m-%d")
+            usage[d_str[:7]] = 0.5
         except: pass
         return usage
+    
+    # 2. 연차/조퇴/결근 등 (1일 단위)
     try:
-        parts = date_str.split('~')
-        s = datetime.strptime(parts[0].strip()[:10], "%Y-%m-%d").date()
-        e = datetime.strptime(parts[1].strip()[:10], "%Y-%m-%d").date()
-        kr_holidays = holidays.KR(years=[s.year, e.year])
-        curr = s
-        while curr <= e:
+        s_date = None
+        e_date = None
+
+        if "~" in date_str:
+            parts = date_str.split('~')
+            start_part = parts[0].strip()
+            end_part = parts[1].strip()
+            
+            # 시작일 파싱
+            s_date = datetime.strptime(start_part[:10], "%Y-%m-%d").date()
+            
+            # 종료일 파싱 로직 개선
+            # 종료일 부분이 날짜 형식(YYYY-MM-DD)을 포함하고 있는지 확인
+            if len(end_part) >= 10 and end_part[4] == '-':
+                 e_date = datetime.strptime(end_part[:10], "%Y-%m-%d").date()
+            else:
+                # 날짜 형식이 없으면(예: "17:00") 시작일과 동일한 날짜로 간주 (1일 휴가)
+                e_date = s_date
+        else:
+            # "~"가 없는 경우
+            s_date = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+            e_date = s_date
+
+        # 주말 및 공휴일 제외 계산
+        kr_holidays = holidays.KR(years=[s_date.year, e_date.year])
+        curr = s_date
+        while curr <= e_date:
             if curr.weekday() < 5 and curr not in kr_holidays:
                 m = curr.strftime("%Y-%m")
                 usage[m] = usage.get(m, 0) + 1.0
             curr += timedelta(days=1)
-    except: pass
+            
+    except Exception as e:
+        pass
+        
     return usage
 
 # ==========================================
@@ -829,7 +861,7 @@ with main_container.container():
                             stat_df = pd.DataFrame(final_list, columns=["이름", "월", "사용일수"])
                             if not stat_df.empty:
                                 pivot = stat_df.pivot_table(index="이름", columns="월", values="사용일수", aggfunc="sum", fill_value=0)
-                                st.dataframe(pivot)
+                                st.dataframe(pivot, use_container_width=True)
                             else:
                                 st.info("집계할 데이터가 부족합니다.")
                         except Exception as e:
