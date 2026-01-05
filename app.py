@@ -8,7 +8,7 @@ import pytz
 import holidays
 from streamlit_calendar import calendar
 import time as tm
-import io  # [추가] 엑셀 변환을 위한 입출력 라이브러리
+import io  # 엑셀 변환을 위한 라이브러리
 
 # =========================================================
 # [설정] 페이지 기본 설정
@@ -314,21 +314,21 @@ def update_data_cell(sheet_name, row_idx, col_idx, new_value):
     sheet.update_cell(row_idx + 2, col_idx, new_value)
     st.cache_data.clear()
 
-# 통계 집계 함수
+# 통계 집계 함수 (수정: 예외처리 강화)
 def calculate_leave_usage(date_str, leave_type):
     usage = {}
     
-    # 1. 반차 처리 (0.5일)
-    if "반차" in leave_type:
-        try:
-            d_str = date_str[:10]
-            datetime.strptime(d_str, "%Y-%m-%d")
-            usage[d_str[:7]] = 0.5
-        except: pass
-        return usage
-    
-    # 2. 연차/조퇴/결근 등 (1일 단위)
     try:
+        # 1. 반차 처리 (0.5일)
+        if "반차" in leave_type:
+            try:
+                d_str = date_str[:10]
+                datetime.strptime(d_str, "%Y-%m-%d")
+                usage[d_str[:7]] = 0.5
+            except: pass
+            return usage
+        
+        # 2. 연차/조퇴/결근 등 (1일 단위)
         s_date = None
         e_date = None
 
@@ -340,7 +340,7 @@ def calculate_leave_usage(date_str, leave_type):
             # 시작일 파싱
             s_date = datetime.strptime(start_part[:10], "%Y-%m-%d").date()
             
-            # 종료일 파싱 로직 개선
+            # 종료일 파싱
             if len(end_part) >= 10 and end_part[4] == '-':
                  e_date = datetime.strptime(end_part[:10], "%Y-%m-%d").date()
             else:
@@ -353,12 +353,14 @@ def calculate_leave_usage(date_str, leave_type):
         kr_holidays = holidays.KR(years=[s_date.year, e_date.year])
         curr = s_date
         while curr <= e_date:
+            # 주말(5,6) 아니고 공휴일 아닐 때
             if curr.weekday() < 5 and curr not in kr_holidays:
                 m = curr.strftime("%Y-%m")
                 usage[m] = usage.get(m, 0) + 1.0
             curr += timedelta(days=1)
             
     except Exception as e:
+        # 날짜 형식이 잘못된 경우 무시하고 빈 딕셔너리 반환
         pass
         
     return usage
@@ -498,6 +500,8 @@ with main_container.container():
             view_type = st.radio("보기", ["달력", "목록"], horizontal=True, label_visibility="collapsed")
 
         events = []
+        list_events = [] # 목록 보기를 위한 별도 리스트 (날짜 왜곡 방지)
+
         now_kst = datetime.now(KST)
         kr_holidays = holidays.KR(years=[now_kst.year, now_kst.year+1])
         for d, n in kr_holidays.items():
@@ -507,10 +511,12 @@ with main_container.container():
         if not df_sch.empty and '날짜' in df_sch.columns:
             for i, r in df_sch.iterrows():
                 start, end = r['날짜'], r['날짜']
+                raw_sch_date = r['날짜']
                 if "~" in r['날짜']:
                     try:
                         s, e = r['날짜'].split("~")
                         start = s.strip()
+                        # 달력 표시용 종료일 (+1일)
                         end = (datetime.strptime(e.strip(), "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
                     except: pass
                 
@@ -523,7 +529,21 @@ with main_container.container():
                 elif title_text.startswith("[휴무]"): 
                     evt_color = "#EF4444"
 
-                events.append({"title": f"📢 {title_text}", "start": start, "end": end, "color": evt_color, "extendedProps": {"content": r['내용'], "type": "schedule"}})
+                # 달력용 이벤트
+                events.append({
+                    "title": f"📢 {title_text}", 
+                    "start": start, 
+                    "end": end, 
+                    "color": evt_color, 
+                    "extendedProps": {"content": r['내용'], "type": "schedule", "raw_date": raw_sch_date}
+                })
+                # 목록용 이벤트 (원본 날짜 유지)
+                list_events.append({
+                    "title": f"📢 {title_text}",
+                    "start": raw_sch_date, # 원본 문자열 사용
+                    "end": "",             # 목록에서는 시작에 전체 기간 표시
+                    "type": "schedule"
+                })
 
         df_cal = load_data("근태신청", COMPANY)
         approved_df = pd.DataFrame()
@@ -533,6 +553,8 @@ with main_container.container():
                 try:
                     raw_dt = r.get('날짜및시간', '')
                     start_d, end_d = raw_dt[:10], raw_dt[:10]
+                    
+                    # 달력용 날짜 계산 (종료일 +1)
                     if "~" in raw_dt:
                         parts = raw_dt.split("~")
                         start_d = parts[0].strip()[:10]
@@ -541,13 +563,25 @@ with main_container.container():
                             end_obj = datetime.strptime(end_part[:10], "%Y-%m-%d") + timedelta(days=1)
                             end_d = end_obj.strftime("%Y-%m-%d")
                         else: end_d = start_d
+                    
                     l_type = r['구분']
                     col = "#3b82f6" if "연차" in l_type else "#ef4444"
+                    
+                    # 달력용 추가
                     events.append({
                         "title": f"[{r['이름']}] {l_type}", 
                         "start": start_d, "end": end_d, "color": col,
                         "extendedProps": {"name": r['이름'], "type": "leave", "content": r['사유'], "raw_date": raw_dt}
                     })
+                    
+                    # 목록용 추가 (원본 날짜 문자열 사용)
+                    list_events.append({
+                        "title": f"[{r['이름']}] {l_type}",
+                        "start": r['날짜및시간'], # 원본 날짜 그대로 사용 (12~14로 입력했으면 12~14로 표시)
+                        "end": "",
+                        "type": "leave"
+                    })
+
                 except: pass
 
         if view_type == "달력":
@@ -589,10 +623,16 @@ with main_container.container():
                     else:
                         st.info("집계된 사용 내역이 없습니다.")
         else:
-            filtered_events = [e for e in events if e.get("extendedProps", {}).get("type") != "holiday"]
-            if filtered_events:
-                list_df = pd.DataFrame(filtered_events)
-                st.dataframe(list_df, column_config={"color": None, "extendedProps": None, "resourceId": None, "title": "내용", "start": "시작", "end": "종료"}, hide_index=True, use_container_width=True)
+            # 목록 보기: list_events 사용 (원본 날짜 표시)
+            if list_events:
+                list_df = pd.DataFrame(list_events)
+                # 'end' 컬럼은 비어있으므로 제외하거나 '기간'으로 통일
+                st.dataframe(
+                    list_df[['title', 'start']], 
+                    column_config={"title": "내용", "start": "일시"}, 
+                    hide_index=True, 
+                    use_container_width=True
+                )
             else: st.info("등록된 일정이 없습니다.")
 
     # 4. 근태신청
@@ -850,43 +890,46 @@ with main_container.container():
                 st.write("### 📊 월별 연차 사용 현황")
                 df = load_data("근태신청", COMPANY)
                 if not df.empty and '상태' in df.columns:
-                    df = df[df['상태'] == '최종승인']
-                    stats_data = {} 
-                    for _, row in df.iterrows():
-                        usage = calculate_leave_usage(row['날짜및시간'], row['구분'])
-                        name = row['이름']
-                        if name not in stats_data: stats_data[name] = {}
-                        for mon, val in usage.items():
-                            stats_data[name][mon] = stats_data[name].get(mon, 0) + val
-                    
-                    if stats_data:
-                        final_list = []
-                        for name, mon_data in stats_data.items():
-                            for mon, val in mon_data.items():
-                                final_list.append({"이름": name, "월": mon, "사용일수": val})
+                    # try-except로 통계 오류 방지
+                    try:
+                        df = df[df['상태'] == '최종승인']
+                        stats_data = {} 
+                        for _, row in df.iterrows():
+                            usage = calculate_leave_usage(row['날짜및시간'], row['구분'])
+                            name = row['이름']
+                            if name not in stats_data: stats_data[name] = {}
+                            for mon, val in usage.items():
+                                stats_data[name][mon] = stats_data[name].get(mon, 0) + val
                         
-                        try:
+                        if stats_data:
+                            final_list = []
+                            for name, mon_data in stats_data.items():
+                                for mon, val in mon_data.items():
+                                    final_list.append({"이름": name, "월": mon, "사용일수": val})
+                            
                             stat_df = pd.DataFrame(final_list, columns=["이름", "월", "사용일수"])
                             if not stat_df.empty:
                                 pivot = stat_df.pivot_table(index="이름", columns="월", values="사용일수", aggfunc="sum", fill_value=0)
+                                
+                                # [엑셀 포맷 수정] 컬럼명을 '2025년 12월' 형식으로 변경하여 엑셀이 Dec-25로 자동변환하지 않도록 함
+                                pivot.columns = [f"{c[:4]}년 {c[5:]}월" for c in pivot.columns]
+                                
                                 st.dataframe(pivot, use_container_width=True)
                                 
-                                # [추가된 기능] 엑셀 다운로드
+                                # 엑셀 다운로드
                                 buffer = io.BytesIO()
                                 with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                                     pivot.to_excel(writer, sheet_name='월별통계')
                                     
                                 st.download_button(
-                                    label="📥 엑셀 다운로드",
+                                    label="📥 엑셀 다운로드 (오류 수정됨)",
                                     data=buffer,
                                     file_name=f"월별연차사용현황_{get_today()}.xlsx",
                                     mime="application/vnd.ms-excel"
                                 )
                             else:
                                 st.info("집계할 데이터가 부족합니다.")
-                        except Exception as e:
-                            st.warning("⚠️ 통계 집계 중 오류가 발생했습니다.")
-                            if final_list: st.dataframe(pd.DataFrame(final_list))
-
-                    else: st.info("집계 데이터 없음")
+                        else: st.info("집계 데이터 없음")
+                    except Exception as e:
+                        st.error(f"데이터 집계 중 오류가 발생했습니다: {e}")
                 else: st.info("데이터 없음")
