@@ -242,8 +242,7 @@ def load_data(sheet_name, company_name):
         df = pd.DataFrame(data)
         
         required_cols = {
-            # [수정] 반려사유 컬럼 추가
-            "근태신청": ['소속', '신청일', '이름', '구분', '날짜및시간', '사유', '상태', '비밀번호', '승인담당자', '반려사유'],
+            "근태신청": ['소속', '신청일', '이름', '구분', '날짜및시간', '사유', '상태', '비밀번호', '승인담당자'],
             "공지사항": ['소속', '작성일', '제목', '내용', '중요'],
             "건의사항": ['소속', '작성일', '제목', '내용', '작성자', '비공개', '비밀번호'],
             "일정관리": ['소속', '날짜', '제목', '내용', '작성자']
@@ -291,8 +290,7 @@ def save_attendance(company, name, type_val, date_range_str, reason, password, a
         # 울산 등 기타
         initial_status = "승인대기" 
         
-    # [수정] 반려사유 컬럼(맨 마지막) 빈 값 추가
-    sheet.append_row([company, get_today(), name, type_val, date_range_str, reason, initial_status, str(password), approver, ""])
+    sheet.append_row([company, get_today(), name, type_val, date_range_str, reason, initial_status, str(password), approver])
     st.cache_data.clear()
 
 def save_schedule(company, date_str, title, content, author):
@@ -300,20 +298,10 @@ def save_schedule(company, date_str, title, content, author):
     sheet.append_row([company, date_str, title, content, author])
     st.cache_data.clear()
 
-# [수정] 반려사유 인자 추가
-def update_attendance_step(sheet_name, row_idx, new_status, next_approver=None, reject_reason=None):
+def update_attendance_step(sheet_name, row_idx, new_status, next_approver=None):
     sheet = get_worksheet(sheet_name)
-    # 상태 업데이트 (7번째 열)
     sheet.update_cell(row_idx + 2, 7, new_status)
-    
-    # 다음 결재자 업데이트 (9번째 열)
-    if next_approver: 
-        sheet.update_cell(row_idx + 2, 9, next_approver)
-    
-    # 반려 사유 업데이트 (10번째 열)
-    if reject_reason:
-        sheet.update_cell(row_idx + 2, 10, reject_reason)
-        
+    if next_approver: sheet.update_cell(row_idx + 2, 9, next_approver)
     st.cache_data.clear()
 
 def delete_row_by_index(sheet_name, row_idx):
@@ -569,7 +557,7 @@ with main_container.container():
                     # 달력용 날짜 계산 (종료일 +1)
                     if "~" in raw_dt:
                         parts = raw_dt.split("~")
-                        start_d = parts[0].strip()
+                        start_d = parts[0].strip()[:10]
                         end_part = parts[1].strip()
                         if len(end_part) > 5:
                             end_obj = datetime.strptime(end_part[:10], "%Y-%m-%d") + timedelta(days=1)
@@ -711,14 +699,7 @@ with main_container.container():
                     my_df = df[(df['이름']==s_name) & (df['비밀번호']==s_pw)]
                     if my_df.empty: st.error("내역 없음")
                     else:
-                        for _, r in my_df.iterrows():
-                            # [수정] 상태 표시 및 반려 사유 표시
-                            status_msg = f"{r['날짜및시간']} | {r['구분']} | {r['상태']}"
-                            if r['상태'] == "반려" and r.get('반려사유'):
-                                status_msg += f" (사유: {r['반려사유']})"
-                                st.error(status_msg)
-                            else:
-                                st.info(status_msg)
+                        for _, r in my_df.iterrows(): st.info(f"{r['날짜및시간']} | {r['구분']} | {r['상태']}")
                 else: st.error("데이터가 없습니다.")
 
     # 5. 관리자
@@ -812,14 +793,11 @@ with main_container.container():
                     if pend.empty: st.info("대기중인 건이 없습니다.")
                     else:
                         for i, r in pend.iterrows():
-                            # Expander 제목 흐름 방지 (아이콘 제거 대신 텍스트로 처리)
-                            title_text = f"{r['날짜']} : {r['제목']}" if '제목' in r else f"{r['날짜및시간']} - {r['이름']}"
+                            # Expander 제목 흐름 방지 & 구분 추가 (예: [반차] 2026-01-09... - 김종규)
+                            title_text = f"{r['날짜']} : {r['제목']}" if '제목' in r else f"[{r['구분']}] {r['날짜및시간']} - {r['이름']}"
                             with st.expander(title_text):
+                                st.write(f"구분: **{r['구분']}**")
                                 st.write(f"사유: {r['사유']}")
-                                
-                                # [수정] 반려 사유 입력창 추가
-                                rej_reason_input = st.text_input("반려 사유 (반려 시에만 입력)", key=f"rj_reason_{i}")
-                                
                                 c_app, c_rej = st.columns(2)
                                 if c_app.button("승인", key=f"app_{i}"):
                                     if COMPANY == "장안 제이유":
@@ -835,12 +813,8 @@ with main_container.container():
                                     st.success("승인됨"); tm.sleep(1); st.rerun()
                                     
                                 if c_rej.button("반려", key=f"rej_{i}"):
-                                    if not rej_reason_input:
-                                        st.error("반려 사유를 입력해주세요.")
-                                    else:
-                                        # [수정] 반려 시 사유 전달
-                                        update_attendance_step("근태신청", i, "반려", reject_reason=rej_reason_input)
-                                        st.error("반려됨"); tm.sleep(1); st.rerun()
+                                    update_attendance_step("근태신청", i, "반려")
+                                    st.error("반려됨"); tm.sleep(1); st.rerun()
                 else: st.info("데이터 없음")
 
             with m_tab2:
