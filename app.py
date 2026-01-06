@@ -242,7 +242,8 @@ def load_data(sheet_name, company_name):
         df = pd.DataFrame(data)
         
         required_cols = {
-            "근태신청": ['소속', '신청일', '이름', '구분', '날짜및시간', '사유', '상태', '비밀번호', '승인담당자'],
+            # [수정] 반려사유 컬럼 추가
+            "근태신청": ['소속', '신청일', '이름', '구분', '날짜및시간', '사유', '상태', '비밀번호', '승인담당자', '반려사유'],
             "공지사항": ['소속', '작성일', '제목', '내용', '중요'],
             "건의사항": ['소속', '작성일', '제목', '내용', '작성자', '비공개', '비밀번호'],
             "일정관리": ['소속', '날짜', '제목', '내용', '작성자']
@@ -298,10 +299,12 @@ def save_schedule(company, date_str, title, content, author):
     sheet.append_row([company, date_str, title, content, author])
     st.cache_data.clear()
 
-def update_attendance_step(sheet_name, row_idx, new_status, next_approver=None):
+# [수정] 반려 사유(reject_reason) 매개변수 및 저장 로직 추가
+def update_attendance_step(sheet_name, row_idx, new_status, next_approver=None, reject_reason=None):
     sheet = get_worksheet(sheet_name)
-    sheet.update_cell(row_idx + 2, 7, new_status)
-    if next_approver: sheet.update_cell(row_idx + 2, 9, next_approver)
+    sheet.update_cell(row_idx + 2, 7, new_status) # 상태 업데이트
+    if next_approver: sheet.update_cell(row_idx + 2, 9, next_approver) # 다음 결재자 업데이트
+    if reject_reason: sheet.update_cell(row_idx + 2, 10, reject_reason) # [추가] J열(10)에 반려 사유 저장
     st.cache_data.clear()
 
 def delete_row_by_index(sheet_name, row_idx):
@@ -314,7 +317,7 @@ def update_data_cell(sheet_name, row_idx, col_idx, new_value):
     sheet.update_cell(row_idx + 2, col_idx, new_value)
     st.cache_data.clear()
 
-# 통계 집계 함수 (수정: 예외처리 강화)
+# 통계 집계 함수
 def calculate_leave_usage(date_str, leave_type):
     usage = {}
     
@@ -699,7 +702,12 @@ with main_container.container():
                     my_df = df[(df['이름']==s_name) & (df['비밀번호']==s_pw)]
                     if my_df.empty: st.error("내역 없음")
                     else:
-                        for _, r in my_df.iterrows(): st.info(f"{r['날짜및시간']} | {r['구분']} | {r['상태']}")
+                        # [수정] 반려일 경우 사유 함께 표시
+                        for _, r in my_df.iterrows(): 
+                            msg = f"{r['날짜및시간']} | {r['구분']} | {r['상태']}"
+                            if r['상태'] == "반려" and r.get('반려사유'):
+                                msg += f" (사유: {r['반려사유']})"
+                            st.info(msg)
                 else: st.error("데이터가 없습니다.")
 
     # 5. 관리자
@@ -798,6 +806,10 @@ with main_container.container():
                             with st.expander(title_text):
                                 st.write(f"구분: **{r['구분']}**")
                                 st.write(f"사유: {r['사유']}")
+                                
+                                # [수정] 반려 사유 입력창 추가
+                                reject_reason = st.text_input("반려 사유 (반려 시에만 입력)", key=f"rej_reason_{i}")
+                                
                                 c_app, c_rej = st.columns(2)
                                 if c_app.button("승인", key=f"app_{i}"):
                                     if COMPANY == "장안 제이유":
@@ -813,7 +825,8 @@ with main_container.container():
                                     st.success("승인됨"); tm.sleep(1); st.rerun()
                                     
                                 if c_rej.button("반려", key=f"rej_{i}"):
-                                    update_attendance_step("근태신청", i, "반려")
+                                    # [수정] 반려 사유 함께 전달
+                                    update_attendance_step("근태신청", i, "반려", reject_reason=reject_reason)
                                     st.error("반려됨"); tm.sleep(1); st.rerun()
                 else: st.info("데이터 없음")
 
