@@ -74,7 +74,7 @@ st.markdown("""
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
     
-    /* [2] 탭/라디오 버튼 스타일 */
+    /* [2] 탭/라디오 버튼 스타일 (동그라미 숨김 복구 완료) */
     [data-testid="stRadio"] > div {
         display: flex;
         flex-direction: row;
@@ -89,6 +89,10 @@ st.markdown("""
         scrollbar-width: none;
     }
     [data-testid="stRadio"] > div::-webkit-scrollbar { display: none; }
+    
+    /* ▼▼▼ [누락되었던 코드 복구] 라디오 버튼 동그라미 숨기기 ▼▼▼ */
+    [data-testid="stRadio"] label > div:first-child { display: none !important; }
+    
     [data-testid="stRadio"] label {
         background-color: transparent !important;
         border: none !important;
