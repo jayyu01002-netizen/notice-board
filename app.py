@@ -30,7 +30,7 @@ KST = pytz.timezone('Asia/Seoul')
 # =========================================================
 st.markdown("""
 <style>
-    /* [1] 다크모드 원천 봉쇄 (흰 배경 + 검정 글씨 강제) */
+    /* [1] 기본 스타일 (흰 배경 + 검정 글씨) */
     [data-testid="stAppViewContainer"] {
         background-color: #ffffff !important;
         color: #333333 !important;
@@ -56,9 +56,6 @@ st.markdown("""
         color: #333333 !important;
         border-color: #e5e7eb !important;
     }
-    .stSelectbox div[data-baseweb="select"] span {
-        color: #333333 !important;
-    }
     div[data-baseweb="popover"], div[data-baseweb="menu"], ul {
         background-color: #ffffff !important;
     }
@@ -77,6 +74,7 @@ st.markdown("""
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
     
+    /* [2] 탭/라디오 버튼 스타일 */
     [data-testid="stRadio"] > div {
         display: flex;
         flex-direction: row;
@@ -88,7 +86,6 @@ st.markdown("""
         padding-bottom: 0px !important;
         margin-bottom: 15px;
         -webkit-overflow-scrolling: touch;
-        -ms-overflow-style: none;
         scrollbar-width: none;
     }
     [data-testid="stRadio"] > div::-webkit-scrollbar { display: none; }
@@ -103,7 +100,6 @@ st.markdown("""
         min-width: fit-content;
         border-bottom: 3px solid transparent !important;
     }
-    [data-testid="stRadio"] label > div:first-child { display: none !important; }
     [data-testid="stRadio"] label p {
         color: #9ca3af !important;
         font-weight: 600 !important;
@@ -116,6 +112,8 @@ st.markdown("""
         color: #ef4444 !important;
         font-weight: 800 !important;
     }
+
+    /* [3] 버튼 스타일 */
     div.stButton > button {
         width: 100% !important;        
         border-radius: 8px !important;
@@ -132,6 +130,8 @@ st.markdown("""
         color: white !important;
         border: none !important;
     }
+    
+    /* [4] Expander & Calendar 스타일 */
     .streamlit-expanderHeader {
         background-color: #ffffff !important;
         border: 1px solid #f3f4f6 !important;
@@ -142,10 +142,6 @@ st.markdown("""
         font-family: 'Pretendard', sans-serif !important;
         font-size: 15px !important;
         font-weight: 600 !important;
-    }
-    .streamlit-expanderHeader svg {
-        fill: #333333 !important;
-        stroke: #333333 !important;
     }
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
     .fc-toolbar-title { color: #333333 !important; }
@@ -230,12 +226,12 @@ def image_to_base64(image_file):
         st.error(f"이미지 처리 오류: {e}")
         return ""
 
-# [텍스트 포맷팅 함수] 줄바꿈 문제 해결용
+# [핵심] 줄바꿈 강제 적용 함수 (엔터 -> 마크다운 줄바꿈)
 def format_multiline(text):
     if not text:
         return ""
-    # 마크다운에서 줄바꿈을 인식하게 하려면 공백 2개+엔터가 필요함
-    # 일반 엔터(\n)를 마크다운 줄바꿈(  \n)으로 변환
+    # 마크다운은 문장 끝에 공백 2개가 있어야 줄바꿈으로 인식함
+    # 따라서 사용자가 입력한 \n을 '  \n'으로 변환
     return str(text).replace('\n', '  \n')
 
 @st.cache_data(ttl=300)
@@ -407,7 +403,7 @@ with main_container.container():
                     else: st.subheader(f"📌 {row['제목']}")
                     st.caption(f"📅 {row['작성일']}")
                     
-                    # [이미지 표시 기능]
+                    # [이미지 표시]
                     img_str = str(row.get('이미지데이터', ''))
                     if len(img_str) > 10: 
                         try:
@@ -415,7 +411,7 @@ with main_container.container():
                             st.image(image_bytes, use_container_width=True)
                         except: pass
                     
-                    # [수정] 줄바꿈 처리하여 표시
+                    # [출력 보정] 줄바꿈 강제 적용
                     st.markdown(format_multiline(row['내용']))
                     
                     if st.session_state.get('logged_in_manager') == "MASTER":
@@ -438,14 +434,24 @@ with main_container.container():
         if st.session_state['show_sugg_form']:
             with st.container(border=True):
                 st.write("**📝 제안 작성**")
+                
+                # [편집 도구 가이드 제공]
+                with st.expander("📝 텍스트 서식 가이드 (열기/닫기)"):
+                    st.markdown("""
+                    - **줄바꿈**: 엔터(Enter)를 치면 줄바꿈이 됩니다.
+                    - **굵게**: 별표 두 개로 감싸기 (예: `**굵은글씨**`)
+                    - **기울임**: 별표 한 개로 감싸기 (예: `*기울임*`)
+                    - **빨간색**: `:red[내용]` (예: `:red[강조]`)
+                    - **리스트**: `- 내용` (예: `- 첫번째`)
+                    """)
+
                 with st.form("sugg_form", clear_on_submit=True):
                     c1, c2 = st.columns(2)
                     author = c1.text_input("작성자")
                     pw = c2.text_input("비밀번호(4자리)", type="password")
                     title = st.text_input("제목")
                     
-                    st.caption("내용 작성 팁: 엔터키로 줄바꿈이 가능합니다.")
-                    content = st.text_area("내용")
+                    content = st.text_area("내용 (위의 서식 가이드를 참고하세요)", height=200)
                     
                     private = st.checkbox("🔒 비공개")
                     if st.form_submit_button("등록"):
@@ -466,8 +472,7 @@ with main_container.container():
                         else: st.write(f"**{row['제목']}**")
                         
                         st.caption(f"작성자: {row['작성자']}")
-                        
-                        # [수정] 줄바꿈 처리하여 표시
+                        # [출력 보정]
                         if show_content: st.markdown(format_multiline(row['내용']))
                         
                         if st.session_state.get('logged_in_manager') == "MASTER":
@@ -529,7 +534,6 @@ with main_container.container():
                     "start": start, 
                     "end": end, 
                     "color": evt_color, 
-                    # [수정] 캘린더 이벤트에도 format_multiline 적용은 여기선 불가(JS영역), 클릭시 보이는 팝업에서 처리
                     "extendedProps": {"content": r['내용'], "type": "schedule", "raw_date": raw_sch_date}
                 })
                 list_events.append({
@@ -590,10 +594,9 @@ with main_container.container():
                 
                 with st.container(border=True):
                     st.subheader(f"📌 {evt['title']}")
-                    # [수정] 일정 클릭 시 상세 내용에 줄바꿈 적용
+                    # [출력 보정]
                     content_val = props.get('content', '')
-                    if content_val:
-                        st.markdown(format_multiline(content_val))
+                    if content_val: st.markdown(format_multiline(content_val))
                     
                     if props.get("type") == "leave":
                         name = props.get("name")
@@ -794,56 +797,48 @@ with main_container.container():
                 else: st.info("데이터 없음")
 
             with m_tab2:
-                # [수정] 작성 화면을 2단(작성/미리보기)으로 나누어 편집 도구 느낌 제공
-                st.write("### 📝 공지사항/일정 등록 및 미리보기")
+                st.write("### 📝 공지사항/일정 등록")
                 
-                c_edit, c_prev = st.columns(2)
-                
-                with c_edit:
-                    st.info("🖊️ **작성하기**")
-                    with st.form("n_form", clear_on_submit=True):
-                        type_sel = st.selectbox("유형", ["공지사항", "일정"])
-                        t = st.text_input("제목")
-                        
-                        st.caption("💡 **Tip:** 줄바꿈(엔터), **굵게**, *기울임*, - 리스트 사용 가능")
-                        c = st.text_area("내용", height=200)
-                        
-                        uploaded_img = None
-                        if type_sel == "공지사항":
-                            uploaded_img = st.file_uploader("📷 사진 첨부 (선택)", type=['png', 'jpg', 'jpeg'])
-                            
-                        is_imp = st.checkbox("중요 공지", value=False)
-                        d_range = st.date_input("날짜 (기간 선택 가능)", value=[datetime.now(KST).date()])
-                        is_holiday = False
-                        if manager_id == "MASTER" and type_sel == "일정":
-                            is_holiday = st.checkbox("🚩 전사 휴무/특별 일정 (캘린더에 빨간색 표시)")
+                # [편집 도구 역할] 서식 가이드 제공
+                with st.expander("📝 텍스트 서식 가이드 (열기/닫기)"):
+                    st.markdown("""
+                    - **줄바꿈**: 엔터(Enter)를 치면 줄바꿈이 됩니다.
+                    - **굵게**: 별표 두 개로 감싸기 (예: `**굵은글씨**`)
+                    - **기울임**: 별표 한 개로 감싸기 (예: `*기울임*`)
+                    - **빨간색**: `:red[내용]` (예: `:red[강조]`)
+                    - **리스트**: `- 내용` (예: `- 첫번째`)
+                    """)
 
-                        submitted = st.form_submit_button("등록")
-                        if submitted:
-                            if type_sel == "공지사항": 
-                                save_notice(COMPANY, t, c, is_imp, uploaded_img)
-                            else: 
-                                final_date_str = ""
-                                if len(d_range) == 2: final_date_str = f"{d_range[0]} ~ {d_range[1]}"
-                                elif len(d_range) == 1: final_date_str = str(d_range[0])
-                                else:
-                                    st.error("날짜를 선택해주세요.")
-                                    st.stop()
-                                final_title = t
-                                if is_holiday: final_title = f"[RED]{t}"
-                                save_schedule(COMPANY, final_date_str, final_title, c, manager_name)
-                            st.success("등록 완료"); tm.sleep(1); st.rerun()
-
-                with c_prev:
-                    st.success("👀 **미리보기 (실시간은 아님)**")
-                    st.write("---")
-                    if t: st.subheader(t)
-                    else: st.caption("(제목이 여기에 표시됩니다)")
+                with st.form("n_form", clear_on_submit=True):
+                    type_sel = st.selectbox("유형", ["공지사항", "일정"])
+                    t = st.text_input("제목")
+                    c = st.text_area("내용", height=200, help="위의 서식 가이드를 참고하여 작성하세요.")
                     
-                    if c: st.markdown(format_multiline(c))
-                    else: st.caption("(내용이 여기에 표시됩니다)")
-                    st.write("---")
+                    uploaded_img = None
+                    if type_sel == "공지사항":
+                        uploaded_img = st.file_uploader("📷 사진 첨부 (선택)", type=['png', 'jpg', 'jpeg'])
+                        
+                    is_imp = st.checkbox("중요 공지", value=False)
+                    d_range = st.date_input("날짜 (기간 선택 가능)", value=[datetime.now(KST).date()])
+                    is_holiday = False
+                    if manager_id == "MASTER" and type_sel == "일정":
+                        is_holiday = st.checkbox("🚩 전사 휴무/특별 일정 (캘린더에 빨간색 표시)")
 
+                    if st.form_submit_button("등록"):
+                        if type_sel == "공지사항": 
+                            save_notice(COMPANY, t, c, is_imp, uploaded_img)
+                        else: 
+                            final_date_str = ""
+                            if len(d_range) == 2: final_date_str = f"{d_range[0]} ~ {d_range[1]}"
+                            elif len(d_range) == 1: final_date_str = str(d_range[0])
+                            else:
+                                st.error("날짜를 선택해주세요.")
+                                st.stop()
+                            final_title = t
+                            if is_holiday: final_title = f"[RED]{t}"
+                            save_schedule(COMPANY, final_date_str, final_title, c, manager_name)
+                        st.success("등록 완료"); tm.sleep(1); st.rerun()
+                
                 st.divider()
                 st.write("### 📋 등록된 일정 관리 (수정/삭제)")
                 df_sch = load_data("일정관리", COMPANY)
@@ -861,8 +856,6 @@ with main_container.container():
                                 
                                 new_date_str = st.text_input("날짜", value=r['날짜'], key=f"edit_sd_{i}")
                                 new_title = st.text_input("제목", value=clean_title, key=f"edit_st_{i}")
-                                # [수정] 수정시에도 팁 제공
-                                st.caption("엔터로 줄바꿈 가능")
                                 new_content = st.text_area("내용", value=r['내용'], key=f"edit_sc_{i}")
                                 new_is_red = is_red
                                 if manager_id == "MASTER":
