@@ -199,7 +199,7 @@ def save_user_db(db):
             sheet.append_row([name, str(pw)])
     except Exception as e: st.error(f"저장 오류: {e}")
 
-# [이미지 처리 함수] 이미지를 압축하고 Base64로 변환 (Google Sheet 용량 제한 고려)
+# [이미지 처리 함수]
 def image_to_base64(image_file):
     if image_file is None:
         return ""
@@ -208,20 +208,17 @@ def image_to_base64(image_file):
         if img.mode != 'RGB':
             img = img.convert('RGB')
         
-        # Google Sheet 셀 제한(약 50,000자)을 맞추기 위해 강력하게 리사이징
-        max_width = 400  # 너비를 400px로 제한
+        max_width = 400
         if img.width > max_width:
             ratio = max_width / img.width
             new_height = int(img.height * ratio)
             img = img.resize((max_width, new_height))
         
         buffered = io.BytesIO()
-        # 품질을 50%로 낮추어 용량 확보
         img.save(buffered, format="JPEG", quality=50) 
         
         img_str = base64.b64encode(buffered.getvalue()).decode()
         
-        # 만약 여전히 50,000자를 넘으면 더 줄임 (비상용)
         if len(img_str) > 49000:
             img = img.resize((int(img.width * 0.7), int(img.height * 0.7)))
             buffered = io.BytesIO()
@@ -233,6 +230,14 @@ def image_to_base64(image_file):
         st.error(f"이미지 처리 오류: {e}")
         return ""
 
+# [텍스트 포맷팅 함수] 줄바꿈 문제 해결용
+def format_multiline(text):
+    if not text:
+        return ""
+    # 마크다운에서 줄바꿈을 인식하게 하려면 공백 2개+엔터가 필요함
+    # 일반 엔터(\n)를 마크다운 줄바꿈(  \n)으로 변환
+    return str(text).replace('\n', '  \n')
+
 @st.cache_data(ttl=300)
 def load_data(sheet_name, company_name):
     try:
@@ -242,7 +247,7 @@ def load_data(sheet_name, company_name):
         
         required_cols = {
             "근태신청": ['소속', '신청일', '이름', '구분', '날짜및시간', '사유', '상태', '비밀번호', '승인담당자', '반려사유'],
-            "공지사항": ['소속', '작성일', '제목', '내용', '중요', '이미지데이터'], # 이미지데이터 컬럼 필수
+            "공지사항": ['소속', '작성일', '제목', '내용', '중요', '이미지데이터'], 
             "건의사항": ['소속', '작성일', '제목', '내용', '작성자', '비공개', '비밀번호'],
             "일정관리": ['소속', '날짜', '제목', '내용', '작성자']
         }
@@ -262,11 +267,10 @@ def load_data(sheet_name, company_name):
         return df
     except: return pd.DataFrame()
 
-# [저장 함수] 이미지 파일 인자 처리
+# [저장 함수]
 def save_notice(company, title, content, is_important, image_file=None):
     sheet = get_worksheet("공지사항")
     img_data = image_to_base64(image_file)
-    # 이미지데이터가 너무 길면 에러가 날 수 있으므로 예외처리 가능하지만, 위에서 리사이징 함.
     sheet.append_row([company, get_today(), title, content, "TRUE" if is_important else "FALSE", img_data])
     st.cache_data.clear()
 
@@ -411,7 +415,8 @@ with main_container.container():
                             st.image(image_bytes, use_container_width=True)
                         except: pass
                     
-                    st.markdown(f"{row['내용']}")
+                    # [수정] 줄바꿈 처리하여 표시
+                    st.markdown(format_multiline(row['내용']))
                     
                     if st.session_state.get('logged_in_manager') == "MASTER":
                         with st.expander("🛠️ 관리자 메뉴 (수정/삭제)"):
@@ -438,7 +443,10 @@ with main_container.container():
                     author = c1.text_input("작성자")
                     pw = c2.text_input("비밀번호(4자리)", type="password")
                     title = st.text_input("제목")
+                    
+                    st.caption("내용 작성 팁: 엔터키로 줄바꿈이 가능합니다.")
                     content = st.text_area("내용")
+                    
                     private = st.checkbox("🔒 비공개")
                     if st.form_submit_button("등록"):
                         save_suggestion(COMPANY, title, content, author, private, pw)
@@ -458,7 +466,9 @@ with main_container.container():
                         else: st.write(f"**{row['제목']}**")
                         
                         st.caption(f"작성자: {row['작성자']}")
-                        if show_content: st.write(row['내용'])
+                        
+                        # [수정] 줄바꿈 처리하여 표시
+                        if show_content: st.markdown(format_multiline(row['내용']))
                         
                         if st.session_state.get('logged_in_manager') == "MASTER":
                             with st.expander("🛠️ 관리자 메뉴 (수정/삭제)"):
@@ -519,6 +529,7 @@ with main_container.container():
                     "start": start, 
                     "end": end, 
                     "color": evt_color, 
+                    # [수정] 캘린더 이벤트에도 format_multiline 적용은 여기선 불가(JS영역), 클릭시 보이는 팝업에서 처리
                     "extendedProps": {"content": r['내용'], "type": "schedule", "raw_date": raw_sch_date}
                 })
                 list_events.append({
@@ -576,19 +587,27 @@ with main_container.container():
             if cal.get("callback") == "eventClick":
                 evt = cal["eventClick"]["event"]
                 props = evt.get("extendedProps", {})
-                st.info(f"📌 {evt['title']}")
-                if props.get("type") == "leave":
-                    name = props.get("name")
-                    user_df = approved_df[approved_df['이름'] == name]
-                    total_usage = {}
-                    for _, u_row in user_df.iterrows():
-                        usage = calculate_leave_usage(u_row['날짜및시간'], u_row['구분'])
-                        for m, val in usage.items():
-                            total_usage[m] = total_usage.get(m, 0) + val
-                    st.write(f"📊 **{name}님의 월별 실사용 현황**")
-                    if total_usage:
-                        st.dataframe(pd.DataFrame(list(total_usage.items()), columns=["월", "사용일수"]).sort_values("월"), hide_index=True)
-                    else: st.info("집계된 사용 내역이 없습니다.")
+                
+                with st.container(border=True):
+                    st.subheader(f"📌 {evt['title']}")
+                    # [수정] 일정 클릭 시 상세 내용에 줄바꿈 적용
+                    content_val = props.get('content', '')
+                    if content_val:
+                        st.markdown(format_multiline(content_val))
+                    
+                    if props.get("type") == "leave":
+                        name = props.get("name")
+                        user_df = approved_df[approved_df['이름'] == name]
+                        total_usage = {}
+                        for _, u_row in user_df.iterrows():
+                            usage = calculate_leave_usage(u_row['날짜및시간'], u_row['구분'])
+                            for m, val in usage.items():
+                                total_usage[m] = total_usage.get(m, 0) + val
+                        st.divider()
+                        st.write(f"📊 **{name}님의 월별 실사용 현황**")
+                        if total_usage:
+                            st.dataframe(pd.DataFrame(list(total_usage.items()), columns=["월", "사용일수"]).sort_values("월"), hide_index=True)
+                        else: st.info("집계된 사용 내역이 없습니다.")
         else:
             if list_events:
                 list_df = pd.DataFrame(list_events)
@@ -775,39 +794,56 @@ with main_container.container():
                 else: st.info("데이터 없음")
 
             with m_tab2:
-                st.write("공지사항/일정 등록")
-                with st.form("n_form", clear_on_submit=True):
-                    type_sel = st.selectbox("유형", ["공지사항", "일정"])
-                    t = st.text_input("제목")
-                    c = st.text_area("내용")
-                    
-                    # [이미지 업로드 버튼]
-                    uploaded_img = None
-                    if type_sel == "공지사항":
-                        uploaded_img = st.file_uploader("📷 사진 첨부 (선택)", type=['png', 'jpg', 'jpeg'])
-                        
-                    is_imp = st.checkbox("중요 공지", value=False)
-                    d_range = st.date_input("날짜 (기간 선택 가능)", value=[datetime.now(KST).date()], help="기간을 선택하려면 시작일과 종료일을 클릭하세요.")
-                    is_holiday = False
-                    if manager_id == "MASTER" and type_sel == "일정":
-                        is_holiday = st.checkbox("🚩 전사 휴무/특별 일정 (캘린더에 빨간색 표시)")
-
-                    if st.form_submit_button("등록"):
-                        if type_sel == "공지사항": 
-                            # 이미지 전달
-                            save_notice(COMPANY, t, c, is_imp, uploaded_img)
-                        else: 
-                            final_date_str = ""
-                            if len(d_range) == 2: final_date_str = f"{d_range[0]} ~ {d_range[1]}"
-                            elif len(d_range) == 1: final_date_str = str(d_range[0])
-                            else:
-                                st.error("날짜를 선택해주세요.")
-                                st.stop()
-                            final_title = t
-                            if is_holiday: final_title = f"[RED]{t}"
-                            save_schedule(COMPANY, final_date_str, final_title, c, manager_name)
-                        st.success("등록 완료"); tm.sleep(1); st.rerun()
+                # [수정] 작성 화면을 2단(작성/미리보기)으로 나누어 편집 도구 느낌 제공
+                st.write("### 📝 공지사항/일정 등록 및 미리보기")
                 
+                c_edit, c_prev = st.columns(2)
+                
+                with c_edit:
+                    st.info("🖊️ **작성하기**")
+                    with st.form("n_form", clear_on_submit=True):
+                        type_sel = st.selectbox("유형", ["공지사항", "일정"])
+                        t = st.text_input("제목")
+                        
+                        st.caption("💡 **Tip:** 줄바꿈(엔터), **굵게**, *기울임*, - 리스트 사용 가능")
+                        c = st.text_area("내용", height=200)
+                        
+                        uploaded_img = None
+                        if type_sel == "공지사항":
+                            uploaded_img = st.file_uploader("📷 사진 첨부 (선택)", type=['png', 'jpg', 'jpeg'])
+                            
+                        is_imp = st.checkbox("중요 공지", value=False)
+                        d_range = st.date_input("날짜 (기간 선택 가능)", value=[datetime.now(KST).date()])
+                        is_holiday = False
+                        if manager_id == "MASTER" and type_sel == "일정":
+                            is_holiday = st.checkbox("🚩 전사 휴무/특별 일정 (캘린더에 빨간색 표시)")
+
+                        submitted = st.form_submit_button("등록")
+                        if submitted:
+                            if type_sel == "공지사항": 
+                                save_notice(COMPANY, t, c, is_imp, uploaded_img)
+                            else: 
+                                final_date_str = ""
+                                if len(d_range) == 2: final_date_str = f"{d_range[0]} ~ {d_range[1]}"
+                                elif len(d_range) == 1: final_date_str = str(d_range[0])
+                                else:
+                                    st.error("날짜를 선택해주세요.")
+                                    st.stop()
+                                final_title = t
+                                if is_holiday: final_title = f"[RED]{t}"
+                                save_schedule(COMPANY, final_date_str, final_title, c, manager_name)
+                            st.success("등록 완료"); tm.sleep(1); st.rerun()
+
+                with c_prev:
+                    st.success("👀 **미리보기 (실시간은 아님)**")
+                    st.write("---")
+                    if t: st.subheader(t)
+                    else: st.caption("(제목이 여기에 표시됩니다)")
+                    
+                    if c: st.markdown(format_multiline(c))
+                    else: st.caption("(내용이 여기에 표시됩니다)")
+                    st.write("---")
+
                 st.divider()
                 st.write("### 📋 등록된 일정 관리 (수정/삭제)")
                 df_sch = load_data("일정관리", COMPANY)
@@ -823,12 +859,14 @@ with main_container.container():
                                     is_red = True
                                     clean_title = existing_title.replace("[RED]", "")
                                 
-                                new_date_str = st.text_input("날짜 (YYYY-MM-DD 또는 ~ 범위)", value=r['날짜'], key=f"edit_sd_{i}")
+                                new_date_str = st.text_input("날짜", value=r['날짜'], key=f"edit_sd_{i}")
                                 new_title = st.text_input("제목", value=clean_title, key=f"edit_st_{i}")
+                                # [수정] 수정시에도 팁 제공
+                                st.caption("엔터로 줄바꿈 가능")
                                 new_content = st.text_area("내용", value=r['내용'], key=f"edit_sc_{i}")
                                 new_is_red = is_red
                                 if manager_id == "MASTER":
-                                    new_is_red = st.checkbox("🚩 휴무(빨간색) 태그 적용", value=is_red, key=f"chk_red_{i}")
+                                    new_is_red = st.checkbox("🚩 휴무 태그", value=is_red, key=f"chk_red_{i}")
                                 
                                 c1, c2 = st.columns(2)
                                 if c1.button("수정", key=f"upd_s_{i}"):
