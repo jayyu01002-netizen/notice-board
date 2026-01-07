@@ -6,3 +6,4 @@ pytz
 holidays
 streamlit-calendar
 XlsxWriter
+Pillow

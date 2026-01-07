@@ -8,7 +8,9 @@ import pytz
 import holidays
 from streamlit_calendar import calendar
 import time as tm
-import io  # 엑셀 변환을 위한 라이브러리
+import io
+from PIL import Image
+import base64
 
 # =========================================================
 # [설정] 페이지 기본 설정
@@ -24,7 +26,7 @@ main_container = st.empty()
 KST = pytz.timezone('Asia/Seoul')
 
 # =========================================================
-# [스타일] CSS: 다크모드 완벽 차단 & 아이콘 오류 해결 & 슬라이드바
+# [스타일] CSS
 # =========================================================
 st.markdown("""
 <style>
@@ -33,69 +35,48 @@ st.markdown("""
         background-color: #ffffff !important;
         color: #333333 !important;
     }
-    
-    /* 텍스트 색상 강제 지정 (다크모드에서 흰글씨 되는 것 방지) */
     h1, h2, h3, h4, h5, h6, p, li, label, .stMarkdown, .stText {
         color: #333333 !important;
         font-family: 'Pretendard', sans-serif !important;
     }
-
-    /* [2] 입력창(Input) 스타일링 - 다크모드에서도 흰배경/검정글씨 유지 */
     input, textarea, select {
         background-color: #ffffff !important;
         color: #333333 !important;
-        -webkit-text-fill-color: #333333 !important; /* 사파리/크롬 강제 적용 */
-        caret-color: #ff4b4b !important; /* 커서 색상 */
+        -webkit-text-fill-color: #333333 !important;
+        caret-color: #ff4b4b !important;
         border: 1px solid #e5e7eb !important;
     }
-    
-    /* Streamlit 입력 위젯 래퍼들 */
     .stTextInput > div > div, .stTextArea > div > div, .stDateInput > div > div, .stTimeInput > div > div {
         background-color: #ffffff !important;
         border-radius: 8px !important;
         color: #333333 !important;
     }
-
-    /* [3] 드롭다운(Selectbox) 완벽 해결 */
-    /* 선택된 값 표시 영역 */
     .stSelectbox div[data-baseweb="select"] > div {
         background-color: #ffffff !important;
         color: #333333 !important;
         border-color: #e5e7eb !important;
     }
-    /* 드롭다운 텍스트 */
     .stSelectbox div[data-baseweb="select"] span {
         color: #333333 !important;
     }
-    /* 드롭다운 눌렀을 때 나오는 리스트 창 */
     div[data-baseweb="popover"], div[data-baseweb="menu"], ul {
         background-color: #ffffff !important;
     }
-    /* 리스트 내부 아이템 */
     div[data-baseweb="popover"] li, div[data-baseweb="menu"] div {
         color: #333333 !important;
         background-color: #ffffff !important;
     }
-    /* 리스트 아이템 호버(마우스 올렸을 때) */
     div[data-baseweb="popover"] li:hover, div[data-baseweb="menu"] div:hover {
-        background-color: #f3f4f6 !important; /* 연한 회색 */
+        background-color: #f3f4f6 !important;
     }
-
-    /* [4] 모바일 상단 여백 (제목 잘림 방지) */
     h1 { padding-top: 1rem !important; }
     @media (max-width: 640px) {
         h1 { margin-top: 3rem !important; font-size: 1.5rem !important; }
         .block-container { padding-top: 6rem !important; } 
     }
-
-    /* [5] 상단 불필요 요소 숨김 */
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
     
-    /* ================================================================
-       [6] ★ 슬라이드 탭 메뉴 (터치 스크롤) ★ 
-       ================================================================
-    */
     [data-testid="stRadio"] > div {
         display: flex;
         flex-direction: row;
@@ -107,12 +88,10 @@ st.markdown("""
         padding-bottom: 0px !important;
         margin-bottom: 15px;
         -webkit-overflow-scrolling: touch;
-        -ms-overflow-style: none; /* IE, Edge 스크롤바 숨김 */
-        scrollbar-width: none;    /* Firefox 스크롤바 숨김 */
+        -ms-overflow-style: none;
+        scrollbar-width: none;
     }
-    [data-testid="stRadio"] > div::-webkit-scrollbar { display: none; } /* 크롬 스크롤바 숨김 */
-
-    /* 탭 라벨 */
+    [data-testid="stRadio"] > div::-webkit-scrollbar { display: none; }
     [data-testid="stRadio"] label {
         background-color: transparent !important;
         border: none !important;
@@ -125,24 +104,18 @@ st.markdown("""
         border-bottom: 3px solid transparent !important;
     }
     [data-testid="stRadio"] label > div:first-child { display: none !important; }
-    
-    /* 탭 텍스트 */
     [data-testid="stRadio"] label p {
-        color: #9ca3af !important; /* 회색 */
+        color: #9ca3af !important;
         font-weight: 600 !important;
         font-size: 16px !important;
     }
-    
-    /* 선택된 탭 */
     [data-testid="stRadio"] label:has(input:checked) {
-        border-bottom: 3px solid #ef4444 !important; /* 빨간 밑줄 */
+        border-bottom: 3px solid #ef4444 !important;
     }
     [data-testid="stRadio"] label:has(input:checked) p {
-        color: #ef4444 !important; /* 빨간 글씨 */
+        color: #ef4444 !important;
         font-weight: 800 !important;
     }
-
-    /* [7] 버튼 디자인 */
     div.stButton > button {
         width: 100% !important;        
         border-radius: 8px !important;
@@ -153,35 +126,27 @@ st.markdown("""
         padding: 0.6rem !important;
         box-shadow: none !important;
     }
-    /* 강조 버튼 (등록, 삭제) */
     div[data-testid="stForm"] div.stButton > button, 
     div[data-testid="column"] button[kind="secondary"] {
         background: #ef4444 !important; 
         color: white !important;
         border: none !important;
     }
-
-    /* [8] Expander (화살표 텍스트 깨짐 해결) */
-    /* 폰트를 모든 div에 적용하지 않고 필요한 곳에만 적용하여 아이콘 보호 */
     .streamlit-expanderHeader {
         background-color: #ffffff !important;
         border: 1px solid #f3f4f6 !important;
         border-radius: 8px !important;
         color: #333333 !important;
     }
-    /* 제목 텍스트만 폰트 적용 */
     .streamlit-expanderHeader p {
         font-family: 'Pretendard', sans-serif !important;
         font-size: 15px !important;
         font-weight: 600 !important;
     }
-    /* 아이콘 색상 보정 */
     .streamlit-expanderHeader svg {
         fill: #333333 !important;
         stroke: #333333 !important;
     }
-
-    /* [9] 달력 스타일 */
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
     .fc-toolbar-title { color: #333333 !important; }
     .fc-button { color: #333333 !important; border: 1px solid #e5e7eb !important; }
@@ -234,6 +199,40 @@ def save_user_db(db):
             sheet.append_row([name, str(pw)])
     except Exception as e: st.error(f"저장 오류: {e}")
 
+# [이미지 처리 함수] 이미지를 압축하고 Base64로 변환 (Google Sheet 용량 제한 고려)
+def image_to_base64(image_file):
+    if image_file is None:
+        return ""
+    try:
+        img = Image.open(image_file)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        # Google Sheet 셀 제한(약 50,000자)을 맞추기 위해 강력하게 리사이징
+        max_width = 400  # 너비를 400px로 제한
+        if img.width > max_width:
+            ratio = max_width / img.width
+            new_height = int(img.height * ratio)
+            img = img.resize((max_width, new_height))
+        
+        buffered = io.BytesIO()
+        # 품질을 50%로 낮추어 용량 확보
+        img.save(buffered, format="JPEG", quality=50) 
+        
+        img_str = base64.b64encode(buffered.getvalue()).decode()
+        
+        # 만약 여전히 50,000자를 넘으면 더 줄임 (비상용)
+        if len(img_str) > 49000:
+            img = img.resize((int(img.width * 0.7), int(img.height * 0.7)))
+            buffered = io.BytesIO()
+            img.save(buffered, format="JPEG", quality=40)
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+            
+        return img_str
+    except Exception as e:
+        st.error(f"이미지 처리 오류: {e}")
+        return ""
+
 @st.cache_data(ttl=300)
 def load_data(sheet_name, company_name):
     try:
@@ -242,9 +241,8 @@ def load_data(sheet_name, company_name):
         df = pd.DataFrame(data)
         
         required_cols = {
-            # [수정] 반려사유 컬럼 추가
             "근태신청": ['소속', '신청일', '이름', '구분', '날짜및시간', '사유', '상태', '비밀번호', '승인담당자', '반려사유'],
-            "공지사항": ['소속', '작성일', '제목', '내용', '중요'],
+            "공지사항": ['소속', '작성일', '제목', '내용', '중요', '이미지데이터'], # 이미지데이터 컬럼 필수
             "건의사항": ['소속', '작성일', '제목', '내용', '작성자', '비공개', '비밀번호'],
             "일정관리": ['소속', '날짜', '제목', '내용', '작성자']
         }
@@ -264,9 +262,12 @@ def load_data(sheet_name, company_name):
         return df
     except: return pd.DataFrame()
 
-def save_notice(company, title, content, is_important):
+# [저장 함수] 이미지 파일 인자 처리
+def save_notice(company, title, content, is_important, image_file=None):
     sheet = get_worksheet("공지사항")
-    sheet.append_row([company, get_today(), title, content, "TRUE" if is_important else "FALSE"])
+    img_data = image_to_base64(image_file)
+    # 이미지데이터가 너무 길면 에러가 날 수 있으므로 예외처리 가능하지만, 위에서 리사이징 함.
+    sheet.append_row([company, get_today(), title, content, "TRUE" if is_important else "FALSE", img_data])
     st.cache_data.clear()
 
 def save_suggestion(company, title, content, author, is_private, password):
@@ -276,19 +277,12 @@ def save_suggestion(company, title, content, author, is_private, password):
 
 def save_attendance(company, name, type_val, date_range_str, reason, password, approver):
     sheet = get_worksheet("근태신청")
-    
-    # 기본값 설정
     initial_status = "승인대기"
-
     if company == "장안 제이유":
-        if approver == "MASTER":
-            initial_status = "최종승인대기" 
-        elif approver in JANGAN_FOREMEN:
-            initial_status = "1차승인대기"
-        else:
-            initial_status = "2차승인대기"
+        if approver == "MASTER": initial_status = "최종승인대기" 
+        elif approver in JANGAN_FOREMEN: initial_status = "1차승인대기"
+        else: initial_status = "2차승인대기"
     else:
-        # 울산 등 기타
         initial_status = "승인대기" 
         
     sheet.append_row([company, get_today(), name, type_val, date_range_str, reason, initial_status, str(password), approver])
@@ -299,12 +293,11 @@ def save_schedule(company, date_str, title, content, author):
     sheet.append_row([company, date_str, title, content, author])
     st.cache_data.clear()
 
-# [수정] 반려 사유(reject_reason) 매개변수 및 저장 로직 추가
 def update_attendance_step(sheet_name, row_idx, new_status, next_approver=None, reject_reason=None):
     sheet = get_worksheet(sheet_name)
-    sheet.update_cell(row_idx + 2, 7, new_status) # 상태 업데이트
-    if next_approver: sheet.update_cell(row_idx + 2, 9, next_approver) # 다음 결재자 업데이트
-    if reject_reason: sheet.update_cell(row_idx + 2, 10, reject_reason) # [추가] J열(10)에 반려 사유 저장
+    sheet.update_cell(row_idx + 2, 7, new_status)
+    if next_approver: sheet.update_cell(row_idx + 2, 9, next_approver)
+    if reject_reason: sheet.update_cell(row_idx + 2, 10, reject_reason)
     st.cache_data.clear()
 
 def delete_row_by_index(sheet_name, row_idx):
@@ -317,12 +310,9 @@ def update_data_cell(sheet_name, row_idx, col_idx, new_value):
     sheet.update_cell(row_idx + 2, col_idx, new_value)
     st.cache_data.clear()
 
-# 통계 집계 함수
 def calculate_leave_usage(date_str, leave_type):
     usage = {}
-    
     try:
-        # 1. 반차 처리 (0.5일)
         if "반차" in leave_type:
             try:
                 d_str = date_str[:10]
@@ -331,41 +321,28 @@ def calculate_leave_usage(date_str, leave_type):
             except: pass
             return usage
         
-        # 2. 연차/조퇴/결근 등 (1일 단위)
         s_date = None
         e_date = None
-
         if "~" in date_str:
             parts = date_str.split('~')
             start_part = parts[0].strip()
             end_part = parts[1].strip()
-            
-            # 시작일 파싱
             s_date = datetime.strptime(start_part[:10], "%Y-%m-%d").date()
-            
-            # 종료일 파싱
             if len(end_part) >= 10 and end_part[4] == '-':
                  e_date = datetime.strptime(end_part[:10], "%Y-%m-%d").date()
-            else:
-                e_date = s_date
+            else: e_date = s_date
         else:
             s_date = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
             e_date = s_date
 
-        # 주말 및 공휴일 제외 계산
         kr_holidays = holidays.KR(years=[s_date.year, e_date.year])
         curr = s_date
         while curr <= e_date:
-            # 주말(5,6) 아니고 공휴일 아닐 때
             if curr.weekday() < 5 and curr not in kr_holidays:
                 m = curr.strftime("%Y-%m")
                 usage[m] = usage.get(m, 0) + 1.0
             curr += timedelta(days=1)
-            
-    except Exception as e:
-        # 날짜 형식이 잘못된 경우 무시하고 빈 딕셔너리 반환
-        pass
-        
+    except: pass
     return usage
 
 # ==========================================
@@ -402,9 +379,6 @@ with main_container.container():
     def toggle_sugg(): st.session_state['show_sugg_form'] = not st.session_state['show_sugg_form']
     def toggle_attend(): st.session_state['show_attend_form'] = not st.session_state['show_attend_form']
 
-    # ------------------------------------------------------------------
-    # [네비게이션] 앱 스타일 슬라이딩 탭
-    # ------------------------------------------------------------------
     tabs = ["📋 공지", "🗣️ 제안", "📆 근무표", "📅 근태신청", "⚙️ 관리자"]
     selected_tab = st.radio("메뉴", tabs, horizontal=True, label_visibility="collapsed")
     
@@ -428,6 +402,15 @@ with main_container.container():
                     if is_imp: st.markdown(f":red[**[중요] 🔥 {row['제목']}**]")
                     else: st.subheader(f"📌 {row['제목']}")
                     st.caption(f"📅 {row['작성일']}")
+                    
+                    # [이미지 표시 기능]
+                    img_str = str(row.get('이미지데이터', ''))
+                    if len(img_str) > 10: 
+                        try:
+                            image_bytes = base64.b64decode(img_str)
+                            st.image(image_bytes, use_container_width=True)
+                        except: pass
+                    
                     st.markdown(f"{row['내용']}")
                     
                     if st.session_state.get('logged_in_manager') == "MASTER":
@@ -503,7 +486,7 @@ with main_container.container():
             view_type = st.radio("보기", ["달력", "목록"], horizontal=True, label_visibility="collapsed")
 
         events = []
-        list_events = [] # 목록 보기를 위한 별도 리스트 (날짜 왜곡 방지)
+        list_events = []
 
         now_kst = datetime.now(KST)
         kr_holidays = holidays.KR(years=[now_kst.year, now_kst.year+1])
@@ -519,7 +502,6 @@ with main_container.container():
                     try:
                         s, e = r['날짜'].split("~")
                         start = s.strip()
-                        # 달력 표시용 종료일 (+1일)
                         end = (datetime.strptime(e.strip(), "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
                     except: pass
                 
@@ -532,7 +514,6 @@ with main_container.container():
                 elif title_text.startswith("[휴무]"): 
                     evt_color = "#EF4444"
 
-                # 달력용 이벤트
                 events.append({
                     "title": f"📢 {title_text}", 
                     "start": start, 
@@ -540,11 +521,10 @@ with main_container.container():
                     "color": evt_color, 
                     "extendedProps": {"content": r['내용'], "type": "schedule", "raw_date": raw_sch_date}
                 })
-                # 목록용 이벤트 (원본 날짜 유지)
                 list_events.append({
                     "title": f"📢 {title_text}",
-                    "start": raw_sch_date, # 원본 문자열 사용
-                    "end": "",             # 목록에서는 시작에 전체 기간 표시
+                    "start": raw_sch_date,
+                    "end": "",
                     "type": "schedule"
                 })
 
@@ -556,8 +536,6 @@ with main_container.container():
                 try:
                     raw_dt = r.get('날짜및시간', '')
                     start_d, end_d = raw_dt[:10], raw_dt[:10]
-                    
-                    # 달력용 날짜 계산 (종료일 +1)
                     if "~" in raw_dt:
                         parts = raw_dt.split("~")
                         start_d = parts[0].strip()[:10]
@@ -570,41 +548,28 @@ with main_container.container():
                     l_type = r['구분']
                     col = "#3b82f6" if "연차" in l_type else "#ef4444"
                     
-                    # 달력용 추가
                     events.append({
                         "title": f"[{r['이름']}] {l_type}", 
                         "start": start_d, "end": end_d, "color": col,
                         "extendedProps": {"name": r['이름'], "type": "leave", "content": r['사유'], "raw_date": raw_dt}
                     })
-                    
-                    # 목록용 추가 (원본 날짜 문자열 사용)
                     list_events.append({
                         "title": f"[{r['이름']}] {l_type}",
-                        "start": r['날짜및시간'], # 원본 날짜 그대로 사용 (12~14로 입력했으면 12~14로 표시)
+                        "start": r['날짜및시간'],
                         "end": "",
                         "type": "leave"
                     })
-
                 except: pass
 
         if view_type == "달력":
-            # [핵심] 달력 CSS: 기본 검정 글씨 + 토요일(파랑) + 일요일(빨강)
             calendar_css = """
                 .fc { background: white !important; }
                 .fc-toolbar-title { color: #333333 !important; font-weight: bold !important; font-size: 1.5rem !important; }
                 .fc-button { color: #333333 !important; border: 1px solid #e5e7eb !important; }
-                
-                /* 기본 날짜 글씨 (검정) */
                 .fc-daygrid-day-number { color: #333333 !important; text-decoration: none !important; }
                 .fc-col-header-cell-cushion { color: #333333 !important; text-decoration: none !important; font-weight: bold !important; }
-                
-                /* 일요일 (빨강) */
-                .fc-day-sun .fc-daygrid-day-number, 
-                .fc-day-sun .fc-col-header-cell-cushion { color: #EF4444 !important; }
-                
-                /* 토요일 (파랑) */
-                .fc-day-sat .fc-daygrid-day-number, 
-                .fc-day-sat .fc-col-header-cell-cushion { color: #3B82F6 !important; }
+                .fc-day-sun .fc-daygrid-day-number, .fc-day-sun .fc-col-header-cell-cushion { color: #EF4444 !important; }
+                .fc-day-sat .fc-daygrid-day-number, .fc-day-sat .fc-col-header-cell-cushion { color: #3B82F6 !important; }
             """
             cal = calendar(events=events, options={"initialView": "dayGridMonth", "height": 750}, key=st.session_state['calendar_key'], custom_css=calendar_css)
             
@@ -623,19 +588,11 @@ with main_container.container():
                     st.write(f"📊 **{name}님의 월별 실사용 현황**")
                     if total_usage:
                         st.dataframe(pd.DataFrame(list(total_usage.items()), columns=["월", "사용일수"]).sort_values("월"), hide_index=True)
-                    else:
-                        st.info("집계된 사용 내역이 없습니다.")
+                    else: st.info("집계된 사용 내역이 없습니다.")
         else:
-            # 목록 보기: list_events 사용 (원본 날짜 표시)
             if list_events:
                 list_df = pd.DataFrame(list_events)
-                # 'end' 컬럼은 비어있으므로 제외하거나 '기간'으로 통일
-                st.dataframe(
-                    list_df[['title', 'start']], 
-                    column_config={"title": "내용", "start": "일시"}, 
-                    hide_index=True, 
-                    use_container_width=True
-                )
+                st.dataframe(list_df[['title', 'start']], column_config={"title": "내용", "start": "일시"}, hide_index=True, use_container_width=True)
             else: st.info("등록된 일정이 없습니다.")
 
     # 4. 근태신청
@@ -651,7 +608,6 @@ with main_container.container():
                     st.write("**📆 일시 및 시간 선택 (단일)**")
                     dc1, dc2, dc3 = st.columns(3)
                     d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
-                    
                     t_start = dc2.time_input("시작 시간", value=time(8,0))
                     t_end = dc3.time_input("종료 시간", value=time(17,0)) 
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
@@ -702,7 +658,6 @@ with main_container.container():
                     my_df = df[(df['이름']==s_name) & (df['비밀번호']==s_pw)]
                     if my_df.empty: st.error("내역 없음")
                     else:
-                        # [수정] 반려일 경우 사유 함께 표시
                         for _, r in my_df.iterrows(): 
                             msg = f"{r['날짜및시간']} | {r['구분']} | {r['상태']}"
                             if r['상태'] == "반려" and r.get('반려사유'):
@@ -755,10 +710,8 @@ with main_container.container():
             manager_id = st.session_state['logged_in_manager']
             manager_name = manager_id
             
-            # 로그아웃 버튼 공간 확보
             c_info, c_logout = st.columns([0.75, 0.25])
-            with c_info:
-                st.success(f"👋 접속중: {manager_name}")
+            with c_info: st.success(f"👋 접속중: {manager_name}")
             with c_logout:
                 if st.button("로그아웃", type="secondary"):
                     del st.session_state['logged_in_manager']; st.rerun()
@@ -801,31 +754,22 @@ with main_container.container():
                     if pend.empty: st.info("대기중인 건이 없습니다.")
                     else:
                         for i, r in pend.iterrows():
-                            # Expander 제목 흐름 방지 & 구분 추가 (예: [반차] 2026-01-09... - 김종규)
                             title_text = f"{r['날짜']} : {r['제목']}" if '제목' in r else f"[{r['구분']}] {r['날짜및시간']} - {r['이름']}"
                             with st.expander(title_text):
                                 st.write(f"구분: **{r['구분']}**")
                                 st.write(f"사유: {r['사유']}")
-                                
-                                # [수정] 반려 사유 입력창 추가
                                 reject_reason = st.text_input("반려 사유 (반려 시에만 입력)", key=f"rej_reason_{i}")
-                                
                                 c_app, c_rej = st.columns(2)
                                 if c_app.button("승인", key=f"app_{i}"):
                                     if COMPANY == "장안 제이유":
-                                        if manager_id == "MASTER": 
-                                            update_attendance_step("근태신청", i, "최종승인")
-                                        elif manager_id == "반장": 
-                                            update_attendance_step("근태신청", i, "최종승인대기", "MASTER")
-                                        else: 
-                                            update_attendance_step("근태신청", i, "2차승인대기", "반장")
+                                        if manager_id == "MASTER": update_attendance_step("근태신청", i, "최종승인")
+                                        elif manager_id == "반장": update_attendance_step("근태신청", i, "최종승인대기", "MASTER")
+                                        else: update_attendance_step("근태신청", i, "2차승인대기", "반장")
                                     else:
-                                        # 울산: 즉시 최종승인
                                         update_attendance_step("근태신청", i, "최종승인")
                                     st.success("승인됨"); tm.sleep(1); st.rerun()
                                     
                                 if c_rej.button("반려", key=f"rej_{i}"):
-                                    # [수정] 반려 사유 함께 전달
                                     update_attendance_step("근태신청", i, "반려", reject_reason=reject_reason)
                                     st.error("반려됨"); tm.sleep(1); st.rerun()
                 else: st.info("데이터 없음")
@@ -836,30 +780,31 @@ with main_container.container():
                     type_sel = st.selectbox("유형", ["공지사항", "일정"])
                     t = st.text_input("제목")
                     c = st.text_area("내용")
+                    
+                    # [이미지 업로드 버튼]
+                    uploaded_img = None
+                    if type_sel == "공지사항":
+                        uploaded_img = st.file_uploader("📷 사진 첨부 (선택)", type=['png', 'jpg', 'jpeg'])
+                        
                     is_imp = st.checkbox("중요 공지", value=False)
-                    
                     d_range = st.date_input("날짜 (기간 선택 가능)", value=[datetime.now(KST).date()], help="기간을 선택하려면 시작일과 종료일을 클릭하세요.")
-                    
                     is_holiday = False
                     if manager_id == "MASTER" and type_sel == "일정":
                         is_holiday = st.checkbox("🚩 전사 휴무/특별 일정 (캘린더에 빨간색 표시)")
 
                     if st.form_submit_button("등록"):
                         if type_sel == "공지사항": 
-                            save_notice(COMPANY, t, c, is_imp)
+                            # 이미지 전달
+                            save_notice(COMPANY, t, c, is_imp, uploaded_img)
                         else: 
                             final_date_str = ""
-                            if len(d_range) == 2:
-                                final_date_str = f"{d_range[0]} ~ {d_range[1]}"
-                            elif len(d_range) == 1:
-                                final_date_str = str(d_range[0])
+                            if len(d_range) == 2: final_date_str = f"{d_range[0]} ~ {d_range[1]}"
+                            elif len(d_range) == 1: final_date_str = str(d_range[0])
                             else:
                                 st.error("날짜를 선택해주세요.")
                                 st.stop()
-
                             final_title = t
                             if is_holiday: final_title = f"[RED]{t}"
-                            
                             save_schedule(COMPANY, final_date_str, final_title, c, manager_name)
                         st.success("등록 완료"); tm.sleep(1); st.rerun()
                 
@@ -869,7 +814,6 @@ with main_container.container():
                 if not df_sch.empty:
                     for i, r in df_sch.iterrows():
                         if manager_id == "MASTER" or r['작성자'] == manager_name:
-                            # Expander 제목 흐름 방지
                             title_text = f"{r['날짜']} : {r['제목']}"
                             with st.expander(title_text):
                                 existing_title = str(r['제목'])
@@ -882,7 +826,6 @@ with main_container.container():
                                 new_date_str = st.text_input("날짜 (YYYY-MM-DD 또는 ~ 범위)", value=r['날짜'], key=f"edit_sd_{i}")
                                 new_title = st.text_input("제목", value=clean_title, key=f"edit_st_{i}")
                                 new_content = st.text_area("내용", value=r['내용'], key=f"edit_sc_{i}")
-                                
                                 new_is_red = is_red
                                 if manager_id == "MASTER":
                                     new_is_red = st.checkbox("🚩 휴무(빨간색) 태그 적용", value=is_red, key=f"chk_red_{i}")
@@ -895,7 +838,6 @@ with main_container.container():
                                     update_data_cell("일정관리", i, 3, final_t)
                                     update_data_cell("일정관리", i, 4, new_content)
                                     st.success("수정됨"); tm.sleep(1); st.rerun()
-                                    
                                 if c2.button("삭제", key=f"del_s_{i}", type="secondary"):
                                     delete_row_by_index("일정관리", i)
                                     st.success("삭제됨"); tm.sleep(1); st.rerun()
@@ -904,7 +846,6 @@ with main_container.container():
                 st.write("### 📊 월별 연차 사용 현황")
                 df = load_data("근태신청", COMPANY)
                 if not df.empty and '상태' in df.columns:
-                    # try-except로 통계 오류 방지
                     try:
                         df = df[df['상태'] == '최종승인']
                         stats_data = {} 
@@ -920,30 +861,16 @@ with main_container.container():
                             for name, mon_data in stats_data.items():
                                 for mon, val in mon_data.items():
                                     final_list.append({"이름": name, "월": mon, "사용일수": val})
-                            
                             stat_df = pd.DataFrame(final_list, columns=["이름", "월", "사용일수"])
                             if not stat_df.empty:
                                 pivot = stat_df.pivot_table(index="이름", columns="월", values="사용일수", aggfunc="sum", fill_value=0)
-                                
-                                # [엑셀 포맷 수정] 컬럼명을 '2025년 12월' 형식으로 변경하여 엑셀이 Dec-25로 자동변환하지 않도록 함
                                 pivot.columns = [f"{c[:4]}년 {c[5:]}월" for c in pivot.columns]
-                                
                                 st.dataframe(pivot, use_container_width=True)
-                                
-                                # 엑셀 다운로드
                                 buffer = io.BytesIO()
                                 with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                                     pivot.to_excel(writer, sheet_name='월별통계')
-                                    
-                                st.download_button(
-                                    label="📥 엑셀 다운로드",
-                                    data=buffer,
-                                    file_name=f"월별연차사용현황_{get_today()}.xlsx",
-                                    mime="application/vnd.ms-excel"
-                                )
-                            else:
-                                st.info("집계할 데이터가 부족합니다.")
+                                st.download_button(label="📥 엑셀 다운로드", data=buffer, file_name=f"월별연차사용현황_{get_today()}.xlsx", mime="application/vnd.ms-excel")
+                            else: st.info("집계할 데이터가 부족합니다.")
                         else: st.info("집계 데이터 없음")
-                    except Exception as e:
-                        st.error(f"데이터 집계 중 오류가 발생했습니다: {e}")
+                    except Exception as e: st.error(f"오류: {e}")
                 else: st.info("데이터 없음")
