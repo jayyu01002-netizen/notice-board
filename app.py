@@ -149,6 +149,12 @@ st.markdown("""
     iframe[title="streamlit_calendar.calendar"] { height: 750px !important; }
     .fc-toolbar-title { color: #333333 !important; }
     .fc-button { color: #333333 !important; border: 1px solid #e5e7eb !important; }
+    
+    /* [5] 슬라이더 스타일 (시간 선택용) */
+    div[data-baseweb="slider"] {
+        padding-top: 10px !important;
+        padding-bottom: 10px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -234,13 +240,11 @@ def format_multiline(text):
         return ""
     return str(text).replace('\n', '  \n')
 
-# [신규 추가] 시간 선택을 위한 헬퍼 함수 (5분 단위)
+# [신규 수정] 시간 선택을 위한 헬퍼 함수 (슬라이더 사용 - 키보드 방지)
 def ui_time_selector(label_text, key_prefix, default_h=8, default_m=0):
     """
-    st.time_input 대신 시/분을 SelectBox로 받아 datetime.time 객체를 반환하는 함수
-    - 5분 단위 (0, 5, 10 ... 55)
+    st.selectbox 대신 st.select_slider를 사용하여 모바일 키보드 팝업 방지
     """
-    # 레이아웃: 라벨(작게) + 시/분 선택 박스
     st.caption(label_text)
     c_h, c_m = st.columns(2)
     
@@ -249,11 +253,14 @@ def ui_time_selector(label_text, key_prefix, default_h=8, default_m=0):
     # 분 리스트 (00, 05, ... 55)
     minutes = [f"{i:02d}" for i in range(0, 60, 5)]
     
+    # 기본값 문자열 변환
+    def_h_str = f"{default_h:02d}"
+    def_m_str = f"{default_m:02d}"
+    
     with c_h:
-        sel_h = st.selectbox("시", hours, index=default_h, key=f"{key_prefix}_h", label_visibility="collapsed")
+        sel_h = st.select_slider("시", options=hours, value=def_h_str, key=f"{key_prefix}_h", label_visibility="collapsed")
     with c_m:
-        # default_m을 5로 나눈 몫이 index가 됨
-        sel_m = st.selectbox("분", minutes, index=default_m//5, key=f"{key_prefix}_m", label_visibility="collapsed")
+        sel_m = st.select_slider("분", options=minutes, value=def_m_str, key=f"{key_prefix}_m", label_visibility="collapsed")
         
     return time(int(sel_h), int(sel_m))
 
@@ -634,7 +641,7 @@ with main_container.container():
                 st.dataframe(list_df[['title', 'start']], column_config={"title": "내용", "start": "일시"}, hide_index=True, use_container_width=True)
             else: st.info("등록된 일정이 없습니다.")
 
-    # 4. 근태신청 (수정됨: 5분 단위 입력 지원)
+    # 4. 근태신청 (수정됨: 슬라이더 적용으로 키보드 방지)
     elif selected_tab == "📅 근태신청":
         st.write("### 📅 연차/근태 신청")
         if st.button("📝 신청서 작성", on_click=toggle_attend): pass
@@ -646,13 +653,11 @@ with main_container.container():
                 
                 if date_mode == "반차/외출/병가 (단일)":
                     st.write("**📆 일시 및 시간 선택 (단일)**")
-                    # 레이아웃 수정: 날짜(1) | 시작시간(1) | 종료시간(1)
                     dc1, dc2, dc3 = st.columns([1, 1, 1])
                     
                     with dc1:
                         d_sel = st.date_input("날짜 선택", value=datetime.now(KST))
                     with dc2:
-                        # 헬퍼 함수로 시간 선택 UI 호출 (5분 단위)
                         t_start = ui_time_selector("시작 시간", "s_single", 8, 0)
                     with dc3:
                         t_end = ui_time_selector("종료 시간", "e_single", 17, 0)
@@ -660,12 +665,10 @@ with main_container.container():
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
                 else:
                     st.write("**📆 기간 및 시간 선택 (연차/휴가)**")
-                    # 레이아웃: 시작 세트 | 종료 세트
                     dc1, dc2 = st.columns(2)
                     with dc1:
                         st.write("📌 **시작 일시**")
                         d_start = st.date_input("시작일", value=datetime.now(KST), key="d_start_range")
-                        # 헬퍼 함수 호출
                         t_start = ui_time_selector("시작 시간", "s_range", 8, 0)
                         
                     with dc2:
