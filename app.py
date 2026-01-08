@@ -74,7 +74,7 @@ st.markdown("""
     [data-testid="stSidebarCollapsedControl"] { display: none !important; }
     section[data-testid="stSidebar"] { display: none !important; }
     
-    /* [2] 탭/라디오 버튼 스타일 (동그라미 숨김 복구 완료) */
+    /* [2] 탭/라디오 버튼 스타일 */
     [data-testid="stRadio"] > div {
         display: flex;
         flex-direction: row;
@@ -90,7 +90,6 @@ st.markdown("""
     }
     [data-testid="stRadio"] > div::-webkit-scrollbar { display: none; }
     
-    /* ▼▼▼ [누락되었던 코드 복구] 라디오 버튼 동그라미 숨기기 ▼▼▼ */
     [data-testid="stRadio"] label > div:first-child { display: none !important; }
     
     [data-testid="stRadio"] label {
@@ -230,13 +229,33 @@ def image_to_base64(image_file):
         st.error(f"이미지 처리 오류: {e}")
         return ""
 
-# [핵심] 줄바꿈 강제 적용 함수 (엔터 -> 마크다운 줄바꿈)
 def format_multiline(text):
     if not text:
         return ""
-    # 마크다운은 문장 끝에 공백 2개가 있어야 줄바꿈으로 인식함
-    # 따라서 사용자가 입력한 \n을 '  \n'으로 변환
     return str(text).replace('\n', '  \n')
+
+# [신규 추가] 시간 선택을 위한 헬퍼 함수 (5분 단위)
+def ui_time_selector(label_text, key_prefix, default_h=8, default_m=0):
+    """
+    st.time_input 대신 시/분을 SelectBox로 받아 datetime.time 객체를 반환하는 함수
+    - 5분 단위 (0, 5, 10 ... 55)
+    """
+    # 레이아웃: 라벨(작게) + 시/분 선택 박스
+    st.caption(label_text)
+    c_h, c_m = st.columns(2)
+    
+    # 시간 리스트 (00~23)
+    hours = [f"{i:02d}" for i in range(24)]
+    # 분 리스트 (00, 05, ... 55)
+    minutes = [f"{i:02d}" for i in range(0, 60, 5)]
+    
+    with c_h:
+        sel_h = st.selectbox("시", hours, index=default_h, key=f"{key_prefix}_h", label_visibility="collapsed")
+    with c_m:
+        # default_m을 5로 나눈 몫이 index가 됨
+        sel_m = st.selectbox("분", minutes, index=default_m//5, key=f"{key_prefix}_m", label_visibility="collapsed")
+        
+    return time(int(sel_h), int(sel_m))
 
 @st.cache_data(ttl=300)
 def load_data(sheet_name, company_name):
@@ -267,7 +286,6 @@ def load_data(sheet_name, company_name):
         return df
     except: return pd.DataFrame()
 
-# [저장 함수]
 def save_notice(company, title, content, is_important, image_file=None):
     sheet = get_worksheet("공지사항")
     img_data = image_to_base64(image_file)
@@ -407,7 +425,6 @@ with main_container.container():
                     else: st.subheader(f"📌 {row['제목']}")
                     st.caption(f"📅 {row['작성일']}")
                     
-                    # [이미지 표시]
                     img_str = str(row.get('이미지데이터', ''))
                     if len(img_str) > 10: 
                         try:
@@ -415,7 +432,6 @@ with main_container.container():
                             st.image(image_bytes, use_container_width=True)
                         except: pass
                     
-                    # [출력 보정] 줄바꿈 강제 적용
                     st.markdown(format_multiline(row['내용']))
                     
                     if st.session_state.get('logged_in_manager') == "MASTER":
@@ -439,7 +455,6 @@ with main_container.container():
             with st.container(border=True):
                 st.write("**📝 제안 작성**")
                 
-                # [편집 도구 가이드 제공]
                 with st.expander("📝 텍스트 서식 가이드 (열기/닫기)"):
                     st.markdown("""
                     - **줄바꿈**: 엔터(Enter)를 치면 줄바꿈이 됩니다.
@@ -476,7 +491,6 @@ with main_container.container():
                         else: st.write(f"**{row['제목']}**")
                         
                         st.caption(f"작성자: {row['작성자']}")
-                        # [출력 보정]
                         if show_content: st.markdown(format_multiline(row['내용']))
                         
                         if st.session_state.get('logged_in_manager') == "MASTER":
@@ -598,7 +612,6 @@ with main_container.container():
                 
                 with st.container(border=True):
                     st.subheader(f"📌 {evt['title']}")
-                    # [출력 보정]
                     content_val = props.get('content', '')
                     if content_val: st.markdown(format_multiline(content_val))
                     
@@ -621,7 +634,7 @@ with main_container.container():
                 st.dataframe(list_df[['title', 'start']], column_config={"title": "내용", "start": "일시"}, hide_index=True, use_container_width=True)
             else: st.info("등록된 일정이 없습니다.")
 
-    # 4. 근태신청
+    # 4. 근태신청 (수정됨: 5분 단위 입력 지원)
     elif selected_tab == "📅 근태신청":
         st.write("### 📅 연차/근태 신청")
         if st.button("📝 신청서 작성", on_click=toggle_attend): pass
@@ -630,24 +643,36 @@ with main_container.container():
             with st.container(border=True):
                 date_mode = st.radio("기간 설정", ["반차/외출/병가 (단일)", "연차/휴가 (기간)"], horizontal=True)
                 final_date_str = ""
+                
                 if date_mode == "반차/외출/병가 (단일)":
                     st.write("**📆 일시 및 시간 선택 (단일)**")
-                    dc1, dc2, dc3 = st.columns(3)
-                    d_sel = dc1.date_input("날짜 선택", value=datetime.now(KST))
-                    t_start = dc2.time_input("시작 시간", value=time(8,0))
-                    t_end = dc3.time_input("종료 시간", value=time(17,0)) 
+                    # 레이아웃 수정: 날짜(1) | 시작시간(1) | 종료시간(1)
+                    dc1, dc2, dc3 = st.columns([1, 1, 1])
+                    
+                    with dc1:
+                        d_sel = st.date_input("날짜 선택", value=datetime.now(KST))
+                    with dc2:
+                        # 헬퍼 함수로 시간 선택 UI 호출 (5분 단위)
+                        t_start = ui_time_selector("시작 시간", "s_single", 8, 0)
+                    with dc3:
+                        t_end = ui_time_selector("종료 시간", "e_single", 17, 0)
+                        
                     final_date_str = f"{d_sel} {t_start.strftime('%H:%M')} ~ {t_end.strftime('%H:%M')}"
                 else:
                     st.write("**📆 기간 및 시간 선택 (연차/휴가)**")
+                    # 레이아웃: 시작 세트 | 종료 세트
                     dc1, dc2 = st.columns(2)
                     with dc1:
-                        st.caption("시작 일시")
-                        d_start = st.date_input("시작일", value=datetime.now(KST))
-                        t_start = st.time_input("시작 시간", value=time(8,0))
+                        st.write("📌 **시작 일시**")
+                        d_start = st.date_input("시작일", value=datetime.now(KST), key="d_start_range")
+                        # 헬퍼 함수 호출
+                        t_start = ui_time_selector("시작 시간", "s_range", 8, 0)
+                        
                     with dc2:
-                        st.caption("종료 일시")
-                        d_end = st.date_input("종료일", value=datetime.now(KST))
-                        t_end = st.time_input("종료 시간", value=time(17,0))
+                        st.write("📌 **종료 일시**")
+                        d_end = st.date_input("종료일", value=datetime.now(KST), key="d_end_range")
+                        t_end = ui_time_selector("종료 시간", "e_range", 17, 0)
+                        
                     if d_start > d_end: st.error("⚠️ 종료일이 시작일보다 빠릅니다.")
                     else: final_date_str = f"{d_start} {t_start.strftime('%H:%M')} ~ {d_end} {t_end.strftime('%H:%M')}"
                 
@@ -803,7 +828,6 @@ with main_container.container():
             with m_tab2:
                 st.write("### 📝 공지사항/일정 등록")
                 
-                # [편집 도구 역할] 서식 가이드 제공
                 with st.expander("📝 텍스트 서식 가이드 (열기/닫기)"):
                     st.markdown("""
                     - **줄바꿈**: 엔터(Enter)를 치면 줄바꿈이 됩니다.
