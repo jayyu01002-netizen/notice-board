@@ -161,9 +161,9 @@ st.markdown("""
 # =========================================================
 # [설정] 관리자 및 회사 정보
 # =========================================================
-JANGAN_FOREMEN = ["JK 조장", "JX 메인 조장", "JX 어퍼 조장", "MX5 조장", "피더 조장"]
+JANGAN_FOREMEN = ["승인 담당자를 선택 해주세요.", "JK 조장", "JX 메인 조장", "JX 어퍼 조장", "MX5 조장", "피더 조장"]
 JANGAN_MID = ["반장"]
-ULSAN_APPROVERS = ["김범진", "남수영", "홍성곤"]
+ULSAN_APPROVERS = ["승인 담당자를 선택 해주세요.", "김범진", "남수영", "홍성곤"]
 ALL_MANAGERS = JANGAN_FOREMEN + JANGAN_MID + ULSAN_APPROVERS + ["MASTER"]
 
 COMPANIES = {
